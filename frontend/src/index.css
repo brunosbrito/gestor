@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Corporate blue palette for GMX */
+    --background: 0 0% 98%;
+    --foreground: 220 26% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 26% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 26% 14%;
+
+    /* Primary corporate blue */
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 217 91% 70%;
+
+    /* Secondary professional gray */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 26% 14%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 8% 46%;
+
+    /* Accent professional blue */
+    --accent: 214 84% 56%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Success green for positive KPIs */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning orange for attention */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 91% 60%;
+
+    /* Gradients for premium look */
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 70%));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(220 14% 99%));
+    --gradient-dashboard: linear-gradient(180deg, hsl(220 26% 97%), hsl(220 14% 96%));
+    
+    /* Shadows for depth */
+    --shadow-elegant: 0 4px 20px -4px hsl(217 91% 60% / 0.15);
+    --shadow-card: 0 2px 8px -2px hsl(220 13% 91% / 0.3);
+    --shadow-glow: 0 0 20px hsl(217 91% 60% / 0.3);
+
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 220 26% 8%;
+    --foreground: 220 14% 96%;
+
+    --card: 220 26% 10%;
+    --card-foreground: 220 14% 96%;
+
+    --popover: 220 26% 10%;
+    --popover-foreground: 220 14% 96%;
+
+    --primary: 217 91% 70%;
+    --primary-foreground: 220 26% 8%;
+    --primary-glow: 217 91% 80%;
+
+    --secondary: 220 26% 14%;
+    --secondary-foreground: 220 14% 96%;
+
+    --muted: 220 26% 14%;
+    --muted-foreground: 220 8% 64%;
+
+    --accent: 214 84% 66%;
+    --accent-foreground: 220 26% 8%;
+
+    --success: 142 76% 46%;
+    --success-foreground: 220 26% 8%;
+
+    --warning: 38 92% 60%;
+    --warning-foreground: 220 26% 8%;
+
+    --destructive: 0 84% 70%;
+    --destructive-foreground: 220 26% 8%;
+
+    --border: 220 26% 18%;
+    --input: 220 26% 18%;
+    --ring: 217 91% 70%;
+
+    /* Dark mode gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 70%), hsl(217 91% 80%));
+    --gradient-card: linear-gradient(145deg, hsl(220 26% 10%), hsl(220 26% 12%));
+    --gradient-dashboard: linear-gradient(180deg, hsl(220 26% 8%), hsl(220 26% 10%));
+    
+    --shadow-elegant: 0 4px 20px -4px hsl(0 0% 0% / 0.3);
+    --shadow-card: 0 2px 8px -2px hsl(0 0% 0% / 0.2);
+    --shadow-glow: 0 0 20px hsl(217 91% 70% / 0.2);
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
