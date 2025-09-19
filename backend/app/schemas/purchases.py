@@ -1,10 +1,21 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from decimal import Decimal
 from datetime import datetime
 
 
-class SupplierCreate(BaseModel):
+# Base configuration for all models
+class BaseSchema(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        # Configure JSON serialization
+        json_encoders={
+            Decimal: float,  # Convert Decimal to float for JSON serialization
+        }
+    )
+
+
+class SupplierCreate(BaseSchema):
     nome: str
     cnpj: Optional[str] = None
     email: Optional[str] = None
@@ -17,11 +28,8 @@ class SupplierResponse(SupplierCreate):
     is_approved: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
 
-
-class QuotationCreate(BaseModel):
+class QuotationCreate(BaseSchema):
     supplier_id: int
     valor_total: Decimal
     prazo_entrega_dias: Optional[int] = None
@@ -36,11 +44,8 @@ class QuotationResponse(QuotationCreate):
     is_selected: bool
     supplier: SupplierResponse
 
-    class Config:
-        from_attributes = True
 
-
-class PurchaseOrderItemCreate(BaseModel):
+class PurchaseOrderItemCreate(BaseSchema):
     budget_item_id: Optional[int] = None
     descricao: str
     centro_custo: str
@@ -59,11 +64,8 @@ class PurchaseOrderItemResponse(PurchaseOrderItemCreate):
     id: int
     purchase_order_id: int
 
-    class Config:
-        from_attributes = True
 
-
-class PurchaseOrderCreate(BaseModel):
+class PurchaseOrderCreate(BaseSchema):
     contract_id: int
     numero_oc: str
     supplier_id: int
@@ -75,7 +77,7 @@ class PurchaseOrderCreate(BaseModel):
     quotations: List[QuotationCreate] = []
 
 
-class PurchaseOrderResponse(BaseModel):
+class PurchaseOrderResponse(BaseSchema):
     id: int
     contract_id: int
     numero_oc: str
@@ -91,16 +93,13 @@ class PurchaseOrderResponse(BaseModel):
     created_at: datetime
     supplier: SupplierResponse
 
-    class Config:
-        from_attributes = True
-
 
 class PurchaseOrderDetailResponse(PurchaseOrderResponse):
     items: List[PurchaseOrderItemResponse] = []
     quotations: List[QuotationResponse] = []
 
 
-class InvoiceItemCreate(BaseModel):
+class InvoiceItemCreate(BaseSchema):
     descricao: str
     centro_custo: str
     unidade: Optional[str] = None
@@ -117,11 +116,8 @@ class InvoiceItemResponse(InvoiceItemCreate):
     id: int
     invoice_id: int
 
-    class Config:
-        from_attributes = True
 
-
-class InvoiceCreate(BaseModel):
+class InvoiceCreate(BaseSchema):
     purchase_order_id: int
     numero_nf: str
     valor_total: Decimal
@@ -135,9 +131,6 @@ class InvoiceResponse(InvoiceCreate):
     id: int
     data_pagamento: Optional[datetime] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class InvoiceDetailResponse(InvoiceResponse):

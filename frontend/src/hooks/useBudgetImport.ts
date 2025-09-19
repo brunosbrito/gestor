@@ -12,16 +12,16 @@ export const useBudgetImport = () => {
     mutationFn: (file: File) => budgetService.parseSpreadsheet(file),
     onSuccess: (result) => {
       setImportResult(result);
-      
-      if (result.success) {
+
+      if (result.errors.length === 0) {
         toast({
           title: "Importação realizada",
-          description: `${result.items.length} itens importados com sucesso`,
+          description: `${result.imported_items} itens importados com sucesso`,
         });
       } else {
         toast({
-          title: "Erro na importação",
-          description: result.errors.join(', '),
+          title: "Aviso",
+          description: `Importação concluída com ${result.errors.length} erro(s)`,
           variant: "destructive",
         });
       }

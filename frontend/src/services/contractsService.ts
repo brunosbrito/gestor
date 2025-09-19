@@ -1,25 +1,61 @@
-import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
-import { Contract, ApiResponse } from '@/types';
+import { apiGet, apiPost, apiPut, apiDelete, apiUpload } from '@/lib/api';
+import {
+  Contract,
+  ContractDetails,
+  ContractCreate,
+  ApiResponse,
+  BudgetItem,
+  ContractType
+} from '@/types';
+import { Contact } from 'lucide-react';
+
+export interface ContractListResponse {
+  contracts: Contract[];
+  total: number;
+  page: number;
+  per_page: number;
+}
 
 export const contractsService = {
   // Get all contracts
-  getAll: (): Promise<ApiResponse<Contract[]>> => {
-    return apiGet<Contract[]>('/contracts');
+  getAll: async (): Promise<ApiResponse<{ contracts: Contract[] }>> => {
+    try {
+      // Backend returns ContractListResponse with contracts array
+      const response = await apiGet<{ contracts: Contract[]; total: number; page: number; per_page: number }>('/contracts');
+      return response;
+    } catch (error) {
+      console.error('❌ Error in contractsService.getAll:', error);
+      throw error;
+    }
   },
 
   // Get contract by ID
-  getById: (id: number): Promise<ApiResponse<Contract>> => {
-    return apiGet<Contract>(`/contracts/${id}`);
+  getById: async (id: number): Promise<ApiResponse<ContractDetails>> => {
+    return apiGet<ContractDetails>(`/contracts/${id}`);
   },
 
-  // Create new contract
-  create: (contract: Omit<Contract, 'id'>): Promise<ApiResponse<Contract>> => {
-    return apiPost<Contract>('/contracts', contract);
+  // Create new contract with QQP_Cliente file
+  create: async (contractData: ContractCreate, qqpFile: File): Promise<ApiResponse<Contract>> => {
+    const formData = new FormData();
+
+    // Add contract data fields
+    formData.append('name', contractData.name);
+    formData.append('client', contractData.client);
+    formData.append('contractType', contractData.contractType);
+    formData.append('startDate', contractData.startDate);
+    if (contractData.description) {
+      formData.append('description', contractData.description);
+    }
+
+    // Add QQP_Cliente file (obrigatório)
+    formData.append('qqp_file', qqpFile);
+
+    return apiUpload<Contract>('/contracts', formData);
   },
 
   // Update contract
-  update: (id: number, contract: Partial<Contract>): Promise<ApiResponse<Contract>> => {
-    return apiPut<Contract>(`/contracts/${id}`, contract);
+  update: async (id: number, contractData: Partial<Contract>): Promise<ApiResponse<Contract>> => {
+    return apiPut<Contract>(`/contracts/${id}`, contractData);
   },
 
   // Delete contract
@@ -38,7 +74,7 @@ export const contractsService = {
   },
 
   // Update contract progress
-  updateProgress: (id: number, progress: number): Promise<ApiResponse<Contract>> => {
-    return apiPut<Contract>(`/contracts/${id}/progress`, { progress });
+  updateProgress: async (id: number, progress: number): Promise<ApiResponse<Contract>> => {
+    return apiPut<Contract>(`/contracts/${id}`, { progress });
   }
 };

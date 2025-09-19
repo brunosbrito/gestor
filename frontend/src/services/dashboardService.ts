@@ -9,7 +9,7 @@ export const dashboardService = {
     reductionTarget: number;
     pendingPurchases: number;
   }>> => {
-    return apiGet('/dashboard/kpis');
+    return apiGet('/dashboards/kpis');
   },
 
   // Get active contracts summary
@@ -21,12 +21,12 @@ export const dashboardService = {
     spent: number;
     status: string;
   }>>> => {
-    return apiGet('/dashboard/active-contracts');
+    return apiGet('/dashboards/active-contracts');
   },
 
   // Get recent activities
   getRecentActivities: (limit: number = 10): Promise<ApiResponse<Activity[]>> => {
-    return apiGet<Activity[]>('/dashboard/activities', { limit });
+    return apiGet<Activity[]>('/dashboards/activities', { limit });
   },
 
   // Get alerts
@@ -39,12 +39,12 @@ export const dashboardService = {
     contractId?: number;
     actionUrl?: string;
   }>>> => {
-    return apiGet('/dashboard/alerts');
+    return apiGet('/dashboards/alerts');
   },
 
   // Generate dashboard report
   generateReport: (format: 'pdf' | 'excel' = 'pdf'): Promise<ApiResponse<{ url: string }>> => {
-    return apiGet('/dashboard/report', { format });
+    return apiGet('/dashboards/report', { format });
   },
 
   // Get analytics overview
@@ -56,6 +56,6 @@ export const dashboardService = {
     pendingNFs: number;
     lastSyncDate?: string;
   }>> => {
-    return apiGet('/dashboard/analytics');
+    return apiGet('/dashboards/analytics');
   }
 };

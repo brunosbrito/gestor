@@ -1,21 +1,54 @@
-// Core entity types
+// Core entity types - Unified between backend and frontend
 export type ContractType = 'material' | 'service';
+export type ContractStatus = 'Em Andamento' | 'Finalizando' | 'Concluído' | 'Pausado';
 
+// Valor Previsto interface - dados extraídos do QQP_Cliente
+export interface ValorPrevisto {
+  id: number;
+  contract_id: number;
+  item: string;
+  servicos: string;
+  unidade?: string;
+  qtd_mensal?: number;
+  duracao_meses?: number;
+  preco_total: number;
+  observacao?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Main Contract interface - Compatible with backend ContractResponse
 export interface Contract {
   id: number;
   name: string;
   client: string;
+  contractType: ContractType;
   value: number;
-  spent: number;
-  progress: number;
-  status: 'Em Andamento' | 'Finalizando' | 'Concluído' | 'Pausado';
+  spent?: number;
+  progress?: number;
+  status: ContractStatus;
   startDate: string;
   endDate?: string;
-  contractType?: ContractType;
-  predictedBudget?: BudgetItem[];
   hasBudgetImport?: boolean;
 }
 
+// Contract Details interface - compatible with backend ContractDetailResponse
+export interface ContractDetails extends Contract {
+  valores_previstos: ValorPrevisto[];
+  budget_items?: any[]; // For future use
+}
+
+// Contract creation interface - compatible with backend (arquivo Excel obrigatório)
+export interface ContractCreate {
+  name: string;
+  client: string;
+  contractType: ContractType;
+  startDate: string;
+  description?: string;
+  // value e predictedBudget agora são extraídos automaticamente do arquivo QQP_Cliente
+}
+
+// BudgetItem interface - compatible with backend
 export interface BudgetItem {
   id: string;
   description: string;
@@ -26,20 +59,31 @@ export interface BudgetItem {
   unit?: string;
   weight?: number;
   unitValue?: number;
-  // Service fields  
+  // Service fields
   hours?: number;
   hourlyRate?: number;
   serviceType?: string;
   totalValue: number;
 }
 
+
+
+// Resultado da importação QQP_Cliente - compatível com nova API
 export interface BudgetImportResult {
   success: boolean;
-  items: BudgetItem[];
-  contractType: ContractType;
-  totalValue: number;
+  imported_items: number;
   errors: string[];
-  warnings: string[];
+  items_total: number;
+  contract_total_value: number;
+  valores_previstos: Array<{
+    item: string;
+    servicos: string;
+    unidade?: string;
+    qtd_mensal?: number;
+    duracao_meses?: number;
+    preco_total: number;
+    observacao?: string;
+  }>;
 }
 
 export interface Purchase {
@@ -72,6 +116,58 @@ export interface Report {
   date: string;
   size: string;
   status: 'Processando' | 'Finalizado' | 'Erro' | 'Disponível';
+}
+
+// Invoice interfaces
+export interface InvoiceItem {
+  id: number;
+  invoice_id: number;
+  descricao: string;
+  centro_custo: string;
+  unidade?: string;
+  quantidade?: number;
+  peso?: number;
+  valor_unitario?: number;
+  valor_total: number;
+  peso_divergente?: number;
+  valor_divergente?: number;
+  justificativa_divergencia?: string;
+  created_at?: string;
+}
+
+export interface Invoice {
+  id: number;
+  contract_id?: number;
+  purchase_order_id?: number;
+  numero_nf: string;
+  fornecedor?: string;
+  valor_total: number;
+  data_emissao: string;
+  data_vencimento?: string;
+  data_pagamento?: string;
+  arquivo_original?: string;
+  observacoes?: string;
+  created_at?: string;
+  items_count?: number;
+}
+
+export interface InvoiceUploadResponse {
+  success: boolean;
+  message: string;
+  processed_count: number;
+  failed_count: number;
+  invoices: Invoice[];
+  errors: string[];
+}
+
+export interface OneDriveUrlRequest {
+  folder_url: string;
+}
+
+export interface InvoicesSummary {
+  total_invoices: number;
+  total_value: number;
+  recent_invoices: Invoice[];
 }
 
 export interface Goal {
@@ -176,6 +272,7 @@ export interface OneDriveSync {
 
 // API Response types
 export interface ApiResponse<T> {
+  contracts: any[];
   data: T;
   success: boolean;
   message?: string;

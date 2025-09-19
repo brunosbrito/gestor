@@ -4,6 +4,10 @@ from sqlalchemy import pool
 from alembic import context
 import sys
 import os
+from dotenv import load_dotenv
+
+# Carregar variáveis do .env
+load_dotenv()
 
 # Adicionar o diretório parent ao path para importar os models
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -19,6 +23,10 @@ from app.models.cost_centers import CostCenter
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Configurar URL do banco usando variáveis de ambiente
+database_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost/gestor_tarefas")
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

@@ -1,37 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, Download, Eye, Filter } from "lucide-react";
+import { useReports, useGenerateAnalyticalReport, useGenerateAccountReport, useExportDashboard, useDownloadReport } from "@/hooks/useReports";
 
 export const ReportsModule = () => {
-  const reports = [
-    {
-      id: 1,
-      name: "Relatório Analítico - Agosto 2025",
-      type: "Analítico",
-      contract: "Edifício Residencial - Zona Sul",
-      date: "2025-08-31",
-      status: "Finalizado",
-      size: "2.4 MB"
-    },
-    {
-      id: 2,
-      name: "Conta Corrente - Complexo Comercial",
-      type: "Sintético",
-      contract: "Complexo Comercial - Centro", 
-      date: "2025-09-10",
-      status: "Disponível",
-      size: "1.1 MB"
-    },
-    {
-      id: 3,
-      name: "Dashboard Gerencial - Setembro",
-      type: "Dashboard",
-      contract: "Todos os Contratos",
-      date: "2025-09-12",
-      status: "Em Geração",
-      size: "---"
-    }
-  ];
+  const { data: reportsData, isLoading: reportsLoading } = useReports();
+  const generateAnalytical = useGenerateAnalyticalReport();
+  const generateAccount = useGenerateAccountReport();
+  const exportDashboard = useExportDashboard();
+  const downloadReport = useDownloadReport();
+
+  const reports = reportsData?.data || [];
 
   return (
     <div className="space-y-6">
@@ -70,8 +49,13 @@ export const ReportsModule = () => {
             <p className="text-sm text-muted-foreground mb-4">
               Inclui todos os detalhes de itens, fornecedores, centros de custo, valores e datas.
             </p>
-            <Button className="w-full" variant="outline">
-              Gerar Analítico
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={() => generateAnalytical.mutate()}
+              disabled={generateAnalytical.isPending}
+            >
+              {generateAnalytical.isPending ? 'Gerando...' : 'Gerar Analítico'}
             </Button>
           </CardContent>
         </Card>
@@ -90,8 +74,13 @@ export const ReportsModule = () => {
             <p className="text-sm text-muted-foreground mb-4">
               Relatório resumido com informações essenciais para o cliente.
             </p>
-            <Button className="w-full" variant="outline">
-              Gerar Sintético
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={() => generateAccount.mutate()}
+              disabled={generateAccount.isPending}
+            >
+              {generateAccount.isPending ? 'Gerando...' : 'Gerar Sintético'}
             </Button>
           </CardContent>
         </Card>
@@ -110,8 +99,13 @@ export const ReportsModule = () => {
             <p className="text-sm text-muted-foreground mb-4">
               Exporta dashboards gerenciais em PDF com todos os indicadores.
             </p>
-            <Button className="w-full" variant="outline">
-              Exportar Dashboard
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={() => exportDashboard.mutate('pdf')}
+              disabled={exportDashboard.isPending}
+            >
+              {exportDashboard.isPending ? 'Exportando...' : 'Exportar Dashboard'}
             </Button>
           </CardContent>
         </Card>
@@ -126,46 +120,96 @@ export const ReportsModule = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {reports.map((report) => (
-              <div key={report.id} className="p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-foreground">{report.name}</h3>
-                    <p className="text-sm text-muted-foreground">{report.contract}</p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span>Tipo: {report.type}</span>
-                      <span>Data: {report.date}</span>
-                      <span>Tamanho: {report.size}</span>
+          {reportsLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="p-4 bg-muted/30 rounded-lg animate-pulse">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="h-5 bg-muted rounded mb-2"></div>
+                      <div className="h-4 bg-muted rounded mb-2 w-2/3"></div>
+                      <div className="flex items-center gap-4 mt-2">
+                        <div className="h-3 bg-muted rounded w-16"></div>
+                        <div className="h-3 bg-muted rounded w-20"></div>
+                        <div className="h-3 bg-muted rounded w-12"></div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-6 bg-muted rounded w-16"></div>
+                      <div className="flex gap-2">
+                        <div className="h-8 bg-muted rounded w-20"></div>
+                        <div className="h-8 bg-muted rounded w-20"></div>
+                      </div>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <span className={`inline-block px-2 py-1 rounded-full text-xs ${
-                      report.status === 'Finalizado' || report.status === 'Disponível' 
-                        ? 'bg-success/10 text-success' 
-                        : 'bg-warning/10 text-warning'
-                    }`}>
-                      {report.status}
-                    </span>
-                    
-                    {(report.status === 'Finalizado' || report.status === 'Disponível') && (
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-3 w-3" />
-                          Visualizar
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-3 w-3" />
-                          Download
-                        </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {reports.map((report) => (
+                <div key={report.id} className="p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-foreground">{report.name}</h3>
+                      <p className="text-sm text-muted-foreground">{report.contract_name || 'Todos os Contratos'}</p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <span>Tipo: {report.type}</span>
+                        <span>Data: {new Date(report.created_at).toLocaleDateString('pt-BR')}</span>
+                        <span>Tamanho: {report.file_size || 'N/A'}</span>
                       </div>
-                    )}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs ${
+                        report.status === 'completed' || report.status === 'available'
+                          ? 'bg-success/10 text-success'
+                          : report.status === 'processing'
+                          ? 'bg-warning/10 text-warning'
+                          : 'bg-muted/10 text-muted-foreground'
+                      }`}>
+                        {report.status === 'completed' ? 'Finalizado' :
+                         report.status === 'available' ? 'Disponível' :
+                         report.status === 'processing' ? 'Em Geração' :
+                         'Pendente'}
+                      </span>
+
+                      {(report.status === 'completed' || report.status === 'available') && (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (report.file_url) {
+                                window.open(report.file_url, '_blank');
+                              }
+                            }}
+                          >
+                            <Eye className="h-3 w-3" />
+                            Visualizar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => downloadReport.mutate(report.id)}
+                            disabled={downloadReport.isPending}
+                          >
+                            <Download className="h-3 w-3" />
+                            {downloadReport.isPending ? 'Baixando...' : 'Download'}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+              {reports.length === 0 && !reportsLoading && (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhum relatório encontrado
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

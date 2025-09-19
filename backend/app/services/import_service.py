@@ -11,7 +11,7 @@ import os
 import tempfile
 import aiofiles
 import openpyxl
-from app.models.contracts import Contract, BudgetItem
+from app.models.contracts import Contract, BudgetItem, ValorPrevisto
 from app.models.purchases import Invoice, InvoiceItem, PurchaseOrder
 from app.models.cost_centers import CostCenter
 from app.schemas.contracts import BudgetItemCreate
@@ -69,99 +69,102 @@ class DataImportService:
         }
 
     async def import_budget_from_excel(
-        self, 
-        file: UploadFile, 
-        contract_id: int,
-        sheet_name: str = None,
+        self,
+        file: UploadFile,
+        contract_id: int = None,
+        sheet_name: str = "QQP_Cliente",
         skip_rows: int = 0
     ) -> Dict[str, Any]:
         """
         Importa orçamento previsto de planilha Excel (QQP Cliente)
+        Retorna tanto os itens quanto o valor total do contrato
         """
-        if not file.filename.endswith(('.xlsx', '.xls')):
+        if not file.filename.endswith(('.xlsx', '.xls', '.xlsm')):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Arquivo deve ser Excel (.xlsx ou .xls)"
+                detail="Arquivo deve ser Excel (.xlsx, .xls ou .xlsm)"
             )
 
         # Salvar arquivo temporariamente
-        temp_path = os.path.join(self.temp_dir, f"budget_{contract_id}_{file.filename}")
-        
+        temp_path = os.path.join(self.temp_dir, f"budget_{contract_id or 'new'}_{file.filename}")
+
         async with aiofiles.open(temp_path, 'wb') as temp_file:
             content = await file.read()
             await temp_file.write(content)
 
         try:
-            # Verificar se o contrato existe
-            contract = self.db.query(Contract).filter(Contract.id == contract_id).first()
-            if not contract:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Contrato não encontrado"
-                )
-
-            # Ler planilha
-            if sheet_name:
-                df = pd.read_excel(temp_path, sheet_name=sheet_name, skiprows=skip_rows)
-            else:
-                df = pd.read_excel(temp_path, skiprows=skip_rows)
-            
-            # Normalizar nomes das colunas
-            df.columns = df.columns.str.lower().str.strip()
-            
-            # Mapear colunas
-            df_mapped = self._map_columns(df, self.budget_column_mapping)
-            
-            # Validar colunas obrigatórias
-            required_columns = ['descricao', 'valor_total_previsto']
-            missing_columns = [col for col in required_columns if col not in df_mapped.columns]
-            
-            if missing_columns:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Colunas obrigatórias ausentes: {missing_columns}"
-                )
-
-            # Processar dados
-            budget_items = []
-            errors = []
-            
-            for index, row in df_mapped.iterrows():
-                try:
-                    # Classificar automaticamente por centro de custo
-                    centro_custo = self._classify_cost_center(row.get('descricao', ''))
-                    
-                    item_data = {
-                        'codigo_item': str(row.get('codigo_item', f'ITEM_{index+1}')),
-                        'descricao': str(row['descricao']),
-                        'centro_custo': row.get('centro_custo', centro_custo),
-                        'unidade': row.get('unidade'),
-                        'quantidade_prevista': self._to_decimal(row.get('quantidade_prevista')),
-                        'peso_previsto': self._to_decimal(row.get('peso_previsto')),
-                        'valor_unitario_previsto': self._to_decimal(row.get('valor_unitario_previsto')),
-                        'valor_total_previsto': self._to_decimal(row['valor_total_previsto'])
-                    }
-                    
-                    # Criar item de orçamento
-                    budget_item = BudgetItem(
-                        contract_id=contract_id,
-                        **{k: v for k, v in item_data.items() if v is not None}
+            # Se contract_id for fornecido, verificar se existe
+            if contract_id:
+                contract = self.db.query(Contract).filter(Contract.id == contract_id).first()
+                if not contract:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Contrato não encontrado"
                     )
-                    
-                    self.db.add(budget_item)
-                    budget_items.append(item_data)
-                    
+
+            # Ler planilha QQP_Cliente sem header para processar estrutura customizada
+            df = pd.read_excel(temp_path, sheet_name=sheet_name, header=None)
+
+            # Extrair valor total do contrato (linha 40, coluna 4)
+            valor_total_contrato = None
+            if df.shape[0] > 40 and df.shape[1] > 4:
+                valor_total = df.iloc[40, 4]
+                if pd.notna(valor_total) and isinstance(valor_total, (int, float)):
+                    valor_total_contrato = Decimal(str(valor_total))
+
+            # Processar tabela de serviços detalhados (linhas 11-21)
+            valores_previstos = []
+            errors = []
+
+            for i in range(11, min(22, df.shape[0])):
+                try:
+                    row = df.iloc[i]
+
+                    # Verificar se a linha tem dados válidos (item, serviço e preço total)
+                    if pd.notna(row[2]) and pd.notna(row[3]) and pd.notna(row[12]):
+                        # Função auxiliar para converter para Decimal
+                        def to_decimal_safe(value):
+                            if pd.notna(value) and value != '':
+                                try:
+                                    return Decimal(str(value))
+                                except:
+                                    return None
+                            return None
+
+                        item_data = {
+                            'item': str(row[2]),  # Coluna 2: Código do item
+                            'servicos': str(row[3]),  # Coluna 3: Descrição do serviço
+                            'unidade': str(row[4]) if pd.notna(row[4]) else None,  # Coluna 4: Unidade
+                            'qtd_mensal': to_decimal_safe(row[5]),  # Coluna 6: QTD Mensal (row[5] = coluna 6)
+                            'duracao_meses': to_decimal_safe(row[6]),  # Coluna 7: Duração Meses (row[6] = coluna 7)
+                            'preco_total': Decimal(str(row[12])),  # Coluna 12: Preço Total
+                            'observacao': str(row[13]) if pd.notna(row[13]) else None  # Coluna 13: Observação
+                        }
+
+                        # Se contract_id fornecido, criar item no banco
+                        if contract_id:
+                            valor_previsto = ValorPrevisto(
+                                contract_id=contract_id,
+                                **{k: v for k, v in item_data.items() if v is not None}
+                            )
+                            self.db.add(valor_previsto)
+
+                        valores_previstos.append(item_data)
+
                 except Exception as e:
-                    errors.append(f"Linha {index + 1}: {str(e)}")
-            
-            if budget_items:
+                    errors.append(f"Linha {i + 1}: {str(e)}")
+
+            # Commit apenas se contract_id foi fornecido
+            if contract_id and valores_previstos:
                 self.db.commit()
             
             return {
                 'success': True,
-                'imported_items': len(budget_items),
+                'imported_items': len(valores_previstos),
                 'errors': errors,
-                'total_value': sum(item['valor_total_previsto'] for item in budget_items if item['valor_total_previsto'])
+                'items_total': sum(item['preco_total'] for item in valores_previstos if item['preco_total']),
+                'contract_total_value': valor_total_contrato,  # Valor total do contrato
+                'valores_previstos': valores_previstos  # Incluir os itens para uso na criação
             }
             
         finally:

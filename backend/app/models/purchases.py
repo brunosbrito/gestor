@@ -95,16 +95,20 @@ class Invoice(Base):
     __tablename__ = "invoices"
 
     id = Column(Integer, primary_key=True, index=True)
-    purchase_order_id = Column(Integer, ForeignKey("purchase_orders.id"), nullable=False)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=True)  # Novo: vinculação direta ao contrato
+    purchase_order_id = Column(Integer, ForeignKey("purchase_orders.id"), nullable=True)  # Agora opcional
     numero_nf = Column(String, nullable=False, index=True)
+    fornecedor = Column(String, nullable=True)  # Novo: nome do fornecedor
     valor_total = Column(Numeric(15, 2), nullable=False)
     data_emissao = Column(DateTime(timezone=True), nullable=False)
     data_vencimento = Column(DateTime(timezone=True))
     data_pagamento = Column(DateTime(timezone=True))
+    arquivo_original = Column(String, nullable=True)  # Novo: path/URL do arquivo original
     observacoes = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relacionamentos
+    contract = relationship("Contract", back_populates="invoices")  # Novo relacionamento
     purchase_order = relationship("PurchaseOrder", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice")
 

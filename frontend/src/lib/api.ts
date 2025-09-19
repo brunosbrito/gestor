@@ -67,11 +67,17 @@ export const apiDelete = <T>(url: string): Promise<ApiResponse<T>> => {
   return api.delete(url);
 };
 
-// File upload helper
-export const apiUpload = <T>(url: string, file: File, onProgress?: (progress: number) => void): Promise<ApiResponse<T>> => {
-  const formData = new FormData();
-  formData.append('file', file);
-  
+// File upload helper - aceita FormData ou File
+export const apiUpload = <T>(url: string, data: FormData | File, onProgress?: (progress: number) => void): Promise<ApiResponse<T>> => {
+  let formData: FormData;
+
+  if (data instanceof FormData) {
+    formData = data;
+  } else {
+    formData = new FormData();
+    formData.append('file', data);
+  }
+
   return api.post(url, formData, {
     headers: {
       'Content-Type': 'multipart/form-data',

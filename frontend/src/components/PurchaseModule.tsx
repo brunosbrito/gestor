@@ -3,44 +3,16 @@ import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/MetricCard";
 import { CreatePurchaseModal } from "@/components/modals/CreatePurchaseModal";
 import { ShoppingCart, Plus, Clock, CheckCircle, Eye, Edit3 } from "lucide-react";
+import { usePurchases, usePurchaseKPIs } from "@/hooks/usePurchases";
 
 export const PurchaseModule = () => {
-  const purchases = [
-    {
-      id: 1,
-      item: "Vergalhões 12mm - 10 toneladas",
-      supplier: "Siderúrgica Nacional",
-      contract: "Edifício Residencial - Zona Sul",
-      orderNumber: "OC-2025-001",
-      value: 85000,
-      status: "Aprovada",
-      date: "2025-09-10"
-    },
-    {
-      id: 2,
-      item: "Cimento CP-II 50kg - 200 sacos",
-      supplier: "Cimentos do Brasil",
-      contract: "Complexo Comercial - Centro",
-      orderNumber: "OC-2025-002",
-      value: 32000,
-      status: "Cotação",
-      date: "2025-09-11"
-    },
-    {
-      id: 3,
-      item: "Madeira para Forma - 50m³",
-      supplier: "Madeireira São Paulo",
-      contract: "Infraestrutura Urbana - Norte",
-      orderNumber: "OC-2025-003",
-      value: 67500,
-      status: "Entregue",
-      date: "2025-09-08"
-    }
-  ];
+  const { data: purchasesData, isLoading: purchasesLoading } = usePurchases();
+  const { data: kpisData, isLoading: kpisLoading } = usePurchaseKPIs();
 
-  const totalValue = purchases.reduce((sum, purchase) => sum + purchase.value, 0);
-  const approvedCount = purchases.filter(p => p.status === "Aprovada").length;
-  const pendingCount = purchases.filter(p => p.status === "Cotação").length;
+  const purchases = purchasesData?.data || [];
+  const totalValue = kpisData?.data?.totalPurchases || 0;
+  const approvedCount = kpisData?.data?.approvedPurchases || 0;
+  const pendingCount = kpisData?.data?.pendingQuotes || 0;
 
   return (
     <div className="space-y-6">
@@ -68,32 +40,48 @@ export const PurchaseModule = () => {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <MetricCard
-          title="Total em Compras"
-          value={totalValue}
-          format="currency"
-          icon={<ShoppingCart className="h-5 w-5 text-primary" />}
-        />
-        <MetricCard
-          title="Compras Aprovadas"
-          value={approvedCount}
-          trend="up"
-          icon={<CheckCircle className="h-5 w-5 text-success" />}
-        />
-        <MetricCard
-          title="Cotações Pendentes"
-          value={pendingCount}
-          trend="neutral"
-          icon={<Clock className="h-5 w-5 text-warning" />}
-        />
-        <MetricCard
-          title="Economia Média"
-          value="8.5"
-          format="percentage"
-          trend="up"
-          trendValue="+1.2% vs meta"
-          icon={<ShoppingCart className="h-5 w-5 text-accent" />}
-        />
+        {kpisLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="bg-gradient-card border-0 shadow-card-hover">
+              <CardContent className="p-6">
+                <div className="animate-pulse">
+                  <div className="h-4 bg-muted rounded mb-2"></div>
+                  <div className="h-8 bg-muted rounded mb-2"></div>
+                  <div className="h-3 bg-muted rounded w-2/3"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <>
+            <MetricCard
+              title="Total em Compras"
+              value={totalValue}
+              format="currency"
+              icon={<ShoppingCart className="h-5 w-5 text-primary" />}
+            />
+            <MetricCard
+              title="Compras Aprovadas"
+              value={approvedCount}
+              trend="up"
+              icon={<CheckCircle className="h-5 w-5 text-success" />}
+            />
+            <MetricCard
+              title="Cotações Pendentes"
+              value={pendingCount}
+              trend="neutral"
+              icon={<Clock className="h-5 w-5 text-warning" />}
+            />
+            <MetricCard
+              title="Economia Média"
+              value={kpisData?.data?.averageSavings?.toString() || "0"}
+              format="percentage"
+              trend="up"
+              trendValue="+1.2% vs meta"
+              icon={<ShoppingCart className="h-5 w-5 text-accent" />}
+            />
+          </>
+        )}
       </div>
 
       {/* Purchases Table */}
@@ -105,64 +93,103 @@ export const PurchaseModule = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {purchases.map((purchase) => (
-              <div key={purchase.id} className="p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-foreground">{purchase.item}</h3>
-                    <p className="text-sm text-muted-foreground">{purchase.supplier}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{purchase.contract}</p>
+          {purchasesLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="p-4 bg-muted/30 rounded-lg animate-pulse">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="h-5 bg-muted rounded mb-2"></div>
+                      <div className="h-4 bg-muted rounded mb-1 w-2/3"></div>
+                      <div className="h-3 bg-muted rounded w-1/2"></div>
+                    </div>
+                    <div className="text-right">
+                      <div className="h-5 bg-muted rounded mb-1 w-20"></div>
+                      <div className="h-3 bg-muted rounded w-16"></div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-foreground">
-                      R$ {purchase.value.toLocaleString('pt-BR')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{purchase.orderNumber}</p>
+                  <div className="flex items-center justify-between">
+                    <div className="h-6 bg-muted rounded w-16"></div>
+                    <div className="flex gap-2">
+                      <div className="h-8 bg-muted rounded w-20"></div>
+                      <div className="h-8 bg-muted rounded w-16"></div>
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <div className="h-3 bg-muted rounded w-24"></div>
                   </div>
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {purchases.map((purchase) => (
+                <div key={purchase.id} className="p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-foreground">{purchase.description || purchase.item_name}</h3>
+                      <p className="text-sm text-muted-foreground">{purchase.supplier_name}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{purchase.contract_name}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-foreground">
+                        R$ {purchase.total_value.toLocaleString('pt-BR')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{purchase.order_number || 'N/A'}</p>
+                    </div>
+                  </div>
 
-                <div className="flex items-center justify-between">
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                    purchase.status === 'Aprovada' ? 'bg-success/10 text-success' :
-                    purchase.status === 'Cotação' ? 'bg-warning/10 text-warning' :
-                    'bg-primary/10 text-primary'
-                  }`}>
-                    {purchase.status}
-                  </span>
-                  
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => {
-                        console.log('Ver cotações da compra:', purchase.id);
-                        // TODO: Implement quotations modal
-                      }}
-                    >
-                      <Eye className="h-3 w-3" />
-                      Ver Cotações
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => {
-                        console.log('Editar compra:', purchase.id);
-                        // TODO: Implement purchase edit modal
-                      }}
-                    >
-                      <Edit3 className="h-3 w-3" />
-                      Editar
-                    </Button>
+                  <div className="flex items-center justify-between">
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                      purchase.status === 'approved' ? 'bg-success/10 text-success' :
+                      purchase.status === 'pending' ? 'bg-warning/10 text-warning' :
+                      purchase.status === 'delivered' ? 'bg-primary/10 text-primary' :
+                      'bg-muted/10 text-muted-foreground'
+                    }`}>
+                      {purchase.status === 'approved' ? 'Aprovada' :
+                       purchase.status === 'pending' ? 'Pendente' :
+                       purchase.status === 'delivered' ? 'Entregue' :
+                       purchase.status}
+                    </span>
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          console.log('Ver cotações da compra:', purchase.id);
+                          // TODO: Implement quotations modal
+                        }}
+                      >
+                        <Eye className="h-3 w-3" />
+                        Ver Cotações
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          console.log('Editar compra:', purchase.id);
+                          // TODO: Implement purchase edit modal
+                        }}
+                      >
+                        <Edit3 className="h-3 w-3" />
+                        Editar
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Data: {new Date(purchase.created_at).toLocaleDateString('pt-BR')}
                   </div>
                 </div>
-
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Data: {purchase.date}
+              ))}
+              {purchases.length === 0 && !purchasesLoading && (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhuma compra encontrada
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

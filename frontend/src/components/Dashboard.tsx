@@ -1,30 +1,35 @@
 import { MetricCard } from "@/components/MetricCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  DollarSign, 
-  TrendingUp, 
-  Target, 
+import {
+  DollarSign,
+  TrendingUp,
+  Target,
   ShoppingCart,
   FileText,
   Clock,
   AlertTriangle,
   Building2
 } from "lucide-react";
+import { useDashboardKPIs, useActiveContracts, useRecentActivities, useDashboardAlerts } from "@/hooks/useDashboard";
 
 export const Dashboard = () => {
-  // Mock data - in real app this would come from API
-  const kpis = [
+  const { data: kpisData, isLoading: kpisLoading } = useDashboardKPIs();
+  const { data: contractsData, isLoading: contractsLoading } = useActiveContracts();
+  const { data: activitiesData, isLoading: activitiesLoading } = useRecentActivities(3);
+  const { data: alertsData, isLoading: alertsLoading } = useDashboardAlerts();
+
+  const kpis = kpisData?.data ? [
     {
       title: "Saldo do Contrato",
-      value: 2450000,
+      value: kpisData.data.contractBalance,
       format: "currency" as const,
       trend: "neutral" as const,
       icon: <DollarSign className="h-5 w-5 text-primary" />
     },
     {
       title: "Economia Realizada",
-      value: "12.5",
+      value: kpisData.data.realizedSavings.toString(),
       format: "percentage" as const,
       trend: "up" as const,
       trendValue: "+2.1% este mês",
@@ -32,7 +37,7 @@ export const Dashboard = () => {
     },
     {
       title: "Meta de Redução",
-      value: "85",
+      value: kpisData.data.reductionTarget.toString(),
       format: "percentage" as const,
       trend: "up" as const,
       trendValue: "Meta: 80%",
@@ -40,36 +45,25 @@ export const Dashboard = () => {
     },
     {
       title: "Compras Pendentes",
-      value: 23,
+      value: kpisData.data.pendingPurchases,
       trend: "down" as const,
       trendValue: "-5 esta semana",
       icon: <ShoppingCart className="h-5 w-5 text-accent" />
     }
-  ];
+  ] : [];
 
-  const recentActivities = [
-    {
-      type: "purchase",
-      title: "Compra de Vergalhões - Fornecedor A",
-      value: "R$ 85.000",
-      time: "2 horas",
-      status: "approved"
-    },
-    {
-      type: "contract",
-      title: "Novo Contrato - Edifício Comercial SP",
-      value: "R$ 1.200.000",
-      time: "1 dia",
-      status: "active"
-    },
-    {
-      type: "report",
-      title: "Relatório Mensal - Agosto 2025",
-      value: "Economia 15.2%",
-      time: "3 dias",
-      status: "completed"
-    }
-  ];
+  const contracts = contractsData?.data?.contracts || [];
+  const recentActivities = activitiesData?.data || [];
+  const alerts = alertsData?.data || [];
+
+  console.log('🏠 Dashboard - Data received:', {
+    contractsData,
+    contracts,
+    contractsCount: contracts.length,
+    contractsLoading,
+    activitiesData,
+    alertsData
+  });
 
   return (
     <div className="space-y-6">
@@ -131,30 +125,54 @@ export const Dashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {[
-                { name: "Edifício Residencial - Zona Sul", progress: 65, budget: "R$ 2.4M", spent: "R$ 1.56M" },
-                { name: "Complexo Comercial - Centro", progress: 40, budget: "R$ 1.8M", spent: "R$ 720K" },
-                { name: "Infraestrutura Urbana - Norte", progress: 85, budget: "R$ 950K", spent: "R$ 807K" }
-              ].map((contract, index) => (
-                <div key={index} className="p-4 bg-muted/30 rounded-lg">
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-medium text-foreground">{contract.name}</h4>
-                    <span className="text-sm text-muted-foreground">{contract.progress}%</span>
+            {contractsLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="p-4 bg-muted/30 rounded-lg animate-pulse">
+                    <div className="h-4 bg-muted rounded mb-2"></div>
+                    <div className="h-2 bg-muted rounded mb-2"></div>
+                    <div className="flex justify-between">
+                      <div className="h-3 w-20 bg-muted rounded"></div>
+                      <div className="h-3 w-20 bg-muted rounded"></div>
+                    </div>
                   </div>
-                  <div className="w-full bg-muted rounded-full h-2 mb-2">
-                    <div 
-                      className="bg-gradient-primary h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${contract.progress}%` }}
-                    />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {contracts.map((contract, index) => {
+                  // Verificações de segurança para o dashboard
+                  const contractValue = typeof contract.value === 'number' ? contract.value : 0;
+                  const contractSpent = typeof contract.spent === 'number' ? contract.spent : 0;
+                  const contractProgress = typeof contract.progress === 'number' ? Math.min(contract.progress, 100) : 0;
+                  const contractName = contract.name || 'Nome não disponível';
+
+                  return (
+                    <div key={contract.id || index} className="p-4 bg-muted/30 rounded-lg">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="font-medium text-foreground">{contractName}</h4>
+                        <span className="text-sm text-muted-foreground">{contractProgress.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-2 mb-2">
+                        <div
+                          className="bg-gradient-primary h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${contractProgress}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Orçado: R$ {contractValue.toLocaleString('pt-BR')}</span>
+                        <span className="text-foreground font-medium">Gasto: R$ {contractSpent.toLocaleString('pt-BR')}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {contracts.length === 0 && !contractsLoading && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhum contrato ativo encontrado
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Orçado: {contract.budget}</span>
-                    <span className="text-foreground font-medium">Gasto: {contract.spent}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -167,55 +185,103 @@ export const Dashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentActivities.map((activity, index) => (
-                <div key={index} className="flex items-start gap-3 p-3 hover:bg-muted/30 rounded-lg transition-colors">
-                  <div className={`p-2 rounded-full ${
-                    activity.status === 'approved' ? 'bg-success/10' :
-                    activity.status === 'active' ? 'bg-primary/10' :
-                    'bg-muted'
-                  }`}>
-                    {activity.type === 'purchase' && <ShoppingCart className="h-4 w-4" />}
-                    {activity.type === 'contract' && <Building2 className="h-4 w-4" />}
-                    {activity.type === 'report' && <FileText className="h-4 w-4" />}
+            {activitiesLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-start gap-3 p-3 animate-pulse">
+                    <div className="w-8 h-8 bg-muted rounded-full"></div>
+                    <div className="flex-1">
+                      <div className="h-3 bg-muted rounded mb-1"></div>
+                      <div className="h-2 bg-muted rounded mb-1 w-2/3"></div>
+                      <div className="h-2 bg-muted rounded w-1/3"></div>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-sm text-foreground">{activity.title}</p>
-                    <p className="text-xs text-muted-foreground">há {activity.time}</p>
-                    <p className="text-xs font-medium text-primary">{activity.value}</p>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {recentActivities.map((activity, index) => (
+                  <div key={activity.id || index} className="flex items-start gap-3 p-3 hover:bg-muted/30 rounded-lg transition-colors">
+                    <div className={`p-2 rounded-full ${
+                      activity.type === 'purchase' ? 'bg-success/10' :
+                      activity.type === 'contract' ? 'bg-primary/10' :
+                      activity.type === 'report' ? 'bg-accent/10' :
+                      'bg-muted'
+                    }`}>
+                      {activity.type === 'purchase' && <ShoppingCart className="h-4 w-4" />}
+                      {activity.type === 'contract' && <Building2 className="h-4 w-4" />}
+                      {activity.type === 'report' && <FileText className="h-4 w-4" />}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-sm text-foreground">{activity.description}</p>
+                      <p className="text-xs text-muted-foreground">{activity.timestamp ? new Date(activity.timestamp).toLocaleString('pt-BR') : 'Data não disponível'}</p>
+                      {activity.metadata && (
+                        <p className="text-xs font-medium text-primary">{activity.metadata}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+                {recentActivities.length === 0 && !activitiesLoading && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhuma atividade recente encontrada
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
       {/* Alerts Section */}
-      <Card className="bg-gradient-card border-0 border-l-4 border-l-warning shadow-card-hover">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-warning" />
-            <div>
-              <h4 className="font-medium text-foreground">Atenção Necessária</h4>
-              <p className="text-sm text-muted-foreground">
-                3 contratos próximos ao limite de orçamento e 5 cotações aguardando aprovação da diretoria.
-              </p>
+      {alertsLoading ? (
+        <Card className="bg-gradient-card border-0 border-l-4 border-l-warning shadow-card-hover">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 animate-pulse">
+              <div className="w-5 h-5 bg-muted rounded"></div>
+              <div className="flex-1">
+                <div className="h-4 bg-muted rounded mb-2"></div>
+                <div className="h-3 bg-muted rounded w-3/4"></div>
+              </div>
+              <div className="w-20 h-8 bg-muted rounded"></div>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="ml-auto"
-              onClick={() => {
-                // Navigate to contracts section
-                window.location.hash = '#contracts';
-              }}
-            >
-              Ver Detalhes
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : alerts.length > 0 ? (
+        <div className="space-y-4">
+          {alerts.map((alert, index) => (
+            <Card key={alert.id || index} className={`bg-gradient-card border-0 border-l-4 shadow-card-hover ${
+              alert.priority === 'high' ? 'border-l-destructive' :
+              alert.priority === 'medium' ? 'border-l-warning' :
+              'border-l-primary'
+            }`}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className={`h-5 w-5 ${
+                    alert.priority === 'high' ? 'text-destructive' :
+                    alert.priority === 'medium' ? 'text-warning' :
+                    'text-primary'
+                  }`} />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-foreground">{alert.title}</h4>
+                    <p className="text-sm text-muted-foreground">{alert.description}</p>
+                  </div>
+                  {alert.actionUrl && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        window.location.hash = alert.actionUrl!;
+                      }}
+                    >
+                      Ver Detalhes
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 };

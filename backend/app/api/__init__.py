@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.routes import auth, contracts, purchases, reports, dashboards, import_data, nf, classification
+from app.api.routes import auth, contracts, purchases, reports, dashboards, import_data, nf, classification, invoices
 
 api_router = APIRouter()
 
@@ -17,3 +17,4 @@ api_router.include_router(dashboards.router, prefix="/dashboards", tags=["dashbo
 api_router.include_router(import_data.router, prefix="/import", tags=["import"])
 api_router.include_router(nf.router, prefix="/nf", tags=["notas-fiscais"])
 api_router.include_router(classification.router, prefix="/classification", tags=["classification"])
+api_router.include_router(invoices.router, prefix="/invoices", tags=["invoices"])

@@ -6,6 +6,14 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -13,59 +21,89 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Building2, Calendar, DollarSign, TrendingUp, Eye, Edit, FileSpreadsheet, Package, Wrench } from "lucide-react";
-import { ContractType, BudgetItem } from "@/types";
-import { ExecutionDashboard } from "@/components/ExecutionDashboard";
+import {
+  Building2,
+  Calendar,
+  DollarSign,
+  TrendingUp,
+  Eye,
+  Edit,
+  FileSpreadsheet,
+  Package,
+  Wrench,
+  Loader2,
+} from "lucide-react";
+import {
+  ContractType,
+  BudgetItem,
+  Contract,
+  ContractDetails,
+  ValorPrevisto,
+} from "@/types";
+import { InvoiceUpload } from "@/components/InvoiceUpload";
+import { useContract } from "@/hooks/useContracts";
 
 // Interface definitions
-interface Contract {
-  id: number;
-  name: string;
-  client: string;
-  value: number;
-  spent: number;
-  progress: number;
-  status: 'Em Andamento' | 'Finalizando' | 'Concluído' | 'Pausado';
-  startDate: string;
-  contractType?: ContractType;
-  predictedBudget?: BudgetItem[];
-  hasBudgetImport?: boolean;
-}
 
 interface ContractDetailsModalProps {
   contract: Contract;
   children: React.ReactNode;
 }
 
-export const ContractDetailsModal = ({ contract, children }: ContractDetailsModalProps) => {
-  const remaining = contract.value - contract.spent;
-  const progressPercent = (contract.progress / 100) * 100;
-  
+export const ContractDetailsModal = ({
+  contract,
+  children,
+}: ContractDetailsModalProps) => {
+  // Buscar detalhes completos do contrato
+  const { data: contractDetails, isLoading, error } = useContract(contract.id);
+
+  // Use contract details if available, fallback to basic contract data
+  const fullContract: ContractDetails = contractDetails ?? contract;
+
+  // Verificações de segurança para valores do contrato
+  const contractValue =
+    typeof fullContract.value === "number" ? fullContract.value : 0;
+  const contractSpent =
+    typeof fullContract.spent === "number" ? fullContract.spent : 0;
+  const contractProgress =
+    typeof fullContract.progress === "number"
+      ? Math.min(Math.max(fullContract.progress, 0), 100)
+      : 0;
+
+  const remaining = contractValue - contractSpent;
+  const progressPercent = contractProgress;
+  const financialProgress =
+    contractValue > 0 ? (contractSpent / contractValue) * 100 : 0;
+
   const getContractTypeLabel = (type: ContractType) => {
-    return type === 'material' ? 'Material/Produto' : 'Serviço';
+    return type === "material" ? "Material/Produto" : "Serviço";
   };
 
   const getContractTypeIcon = (type: ContractType) => {
-    return type === 'material' ? Package : Wrench;
+    return type === "material" ? Package : Wrench;
   };
 
   return (
     <Dialog>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Building2 className="h-5 w-5" />
-            {contract.name}
+            {fullContract.name}
+            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           </DialogTitle>
           <DialogDescription className="flex items-center gap-4">
-            <span>Cliente: {contract.client} • Início: {contract.startDate}</span>
-            {contract.contractType && (
+            <span>
+              Cliente: {fullContract.client} • Início: {fullContract.startDate}
+            </span>
+            {fullContract.contractType && (
               <Badge variant="secondary" className="flex items-center gap-1">
-                {React.createElement(getContractTypeIcon(contract.contractType), { className: "h-3 w-3" })}
-                {getContractTypeLabel(contract.contractType)}
+                {React.createElement(
+                  getContractTypeIcon(fullContract.contractType),
+                  { className: "h-3 w-3" }
+                )}
+                {getContractTypeLabel(fullContract.contractType)}
               </Badge>
             )}
           </DialogDescription>
@@ -74,27 +112,33 @@ export const ContractDetailsModal = ({ contract, children }: ContractDetailsModa
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-            <TabsTrigger value="budget" disabled={!contract.hasBudgetImport}>
-              Orçamento Previsto
-            </TabsTrigger>
-            <TabsTrigger value="execution" disabled={!contract.hasBudgetImport}>
-              Realização
-            </TabsTrigger>
+            <TabsTrigger value="budget">Orçamento Previsto</TabsTrigger>
+            <TabsTrigger value="execution">Realização</TabsTrigger>
             <TabsTrigger value="progress">Acompanhamento</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
             {/* Status Badge */}
             <div className="flex items-center justify-between">
-              <Badge variant={contract.status === 'Em Andamento' ? 'default' : 'secondary'}>
-                {contract.status}
+              <Badge
+                variant={
+                  fullContract.status === "Em Andamento"
+                    ? "default"
+                    : "secondary"
+                }
+              >
+                {fullContract.status}
               </Badge>
-              {contract.hasBudgetImport && (
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <FileSpreadsheet className="h-3 w-3" />
-                  Orçamento Importado
-                </Badge>
-              )}
+              {fullContract.valores_previstos &&
+                fullContract.valores_previstos.length > 0 && (
+                  <Badge variant="outline" className="flex items-center gap-1">
+                    <FileSpreadsheet className="h-3 w-3" />
+                    Orçamento Importado ({
+                      fullContract.valores_previstos.length
+                    }{" "}
+                    itens)
+                  </Badge>
+                )}
             </div>
 
             {/* Financial Summary */}
@@ -108,7 +152,7 @@ export const ContractDetailsModal = ({ contract, children }: ContractDetailsModa
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    R$ {contract.value.toLocaleString('pt-BR')}
+                    R$ {contractValue.toLocaleString("pt-BR")}
                   </div>
                 </CardContent>
               </Card>
@@ -122,7 +166,7 @@ export const ContractDetailsModal = ({ contract, children }: ContractDetailsModa
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-success">
-                    R$ {contract.spent.toLocaleString('pt-BR')}
+                    R$ {contractSpent.toLocaleString("pt-BR")}
                   </div>
                 </CardContent>
               </Card>
@@ -133,7 +177,7 @@ export const ContractDetailsModal = ({ contract, children }: ContractDetailsModa
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-primary">
-                    R$ {remaining.toLocaleString('pt-BR')}
+                    R$ {remaining.toLocaleString("pt-BR")}
                   </div>
                 </CardContent>
               </Card>
@@ -145,11 +189,15 @@ export const ContractDetailsModal = ({ contract, children }: ContractDetailsModa
                 {/* Physical Progress */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">Progresso Físico</CardTitle>
+                    <CardTitle className="text-base">
+                      Progresso Físico
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <span className="text-2xl font-bold">{contract.progress}%</span>
+                      <span className="text-2xl font-bold">
+                        {contractProgress.toFixed(1)}%
+                      </span>
                     </div>
                     <Progress value={progressPercent} className="h-3" />
                   </CardContent>
@@ -158,15 +206,17 @@ export const ContractDetailsModal = ({ contract, children }: ContractDetailsModa
                 {/* Financial Progress */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">Progresso Financeiro</CardTitle>
+                    <CardTitle className="text-base">
+                      Progresso Financeiro
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex justify-between items-center">
                       <span className="text-2xl font-bold">
-                        {((contract.spent / contract.value) * 100).toFixed(1)}%
+                        {financialProgress.toFixed(1)}%
                       </span>
                     </div>
-                    <Progress value={(contract.spent / contract.value) * 100} className="h-3" />
+                    <Progress value={financialProgress} className="h-3" />
                   </CardContent>
                 </Card>
               </div>
@@ -174,7 +224,8 @@ export const ContractDetailsModal = ({ contract, children }: ContractDetailsModa
           </TabsContent>
 
           <TabsContent value="budget" className="space-y-6">
-            {contract.predictedBudget && contract.predictedBudget.length > 0 ? (
+            {fullContract.valores_previstos &&
+            fullContract.valores_previstos.length > 0 ? (
               <div className="space-y-6">
                 {/* Budget Summary */}
                 <Card>
@@ -187,19 +238,43 @@ export const ContractDetailsModal = ({ contract, children }: ContractDetailsModa
                   <CardContent>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
-                        <p className="text-sm text-muted-foreground">Total de Itens</p>
-                        <p className="text-2xl font-bold">{contract.predictedBudget.length}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Valor Previsto</p>
+                        <p className="text-sm text-muted-foreground">
+                          Total de Itens
+                        </p>
                         <p className="text-2xl font-bold">
-                          R$ {contract.predictedBudget.reduce((sum, item) => sum + item.totalValue, 0).toLocaleString('pt-BR')}
+                          {fullContract.valores_previstos.length}
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Categorias</p>
+                        <p className="text-sm text-muted-foreground">
+                          Valor Previsto
+                        </p>
                         <p className="text-2xl font-bold">
-                          {new Set(contract.predictedBudget.map(item => item.category)).size}
+                          R${" "}
+                          {fullContract.valores_previstos
+                            .reduce(
+                              (sum, item) =>
+                                sum +
+                                (typeof item.preco_total === "number"
+                                  ? item.preco_total
+                                  : 0),
+                              0
+                            )
+                            .toLocaleString("pt-BR")}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          Itens Únicos
+                        </p>
+                        <p className="text-2xl font-bold">
+                          {
+                            new Set(
+                              fullContract.valores_previstos.map(
+                                (item) => item.item
+                              )
+                            ).size
+                          }
                         </p>
                       </div>
                     </div>
@@ -209,49 +284,69 @@ export const ContractDetailsModal = ({ contract, children }: ContractDetailsModa
                 {/* Budget Items */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">Itens do Orçamento</CardTitle>
+                    <CardTitle className="text-base">
+                      Itens do Orçamento QQP_Cliente
+                    </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4 max-h-80 overflow-y-auto">
-                      {contract.predictedBudget.map((item) => (
-                        <div key={item.id} className="p-4 bg-muted/30 rounded-lg">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-sm">{item.description}</h4>
-                              <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                                <span>Categoria: {item.category}</span>
-                                {item.costCenter && <span>Centro de Custo: {item.costCenter}</span>}
-                              </div>
-                              <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                                {item.quantity && item.unit && (
-                                  <span>{item.quantity} {item.unit}</span>
+                  <CardContent className="p-0">
+                    <div className="max-h-96 overflow-y-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-background">
+                          <TableRow>
+                            <TableHead className="w-[80px]">Item</TableHead>
+                            <TableHead className="min-w-[200px]">Serviços</TableHead>
+                            <TableHead className="w-[80px]">Unidade</TableHead>
+                            <TableHead className="w-[100px]">Qtd Mensal</TableHead>
+                            <TableHead className="w-[100px]">Duração (meses)</TableHead>
+                            <TableHead className="w-[120px] text-right">Preço Total</TableHead>
+                            <TableHead className="w-[100px] text-right">Qtd Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {fullContract.valores_previstos.map((item) => (
+                            <TableRow key={item.id} className="hover:bg-muted/50">
+                              <TableCell className="font-mono text-xs">
+                                {item.item}
+                              </TableCell>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium text-sm">{item.servicos}</p>
+                                  {item.observacao && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      <span className="font-medium">Obs:</span> {item.observacao}
+                                    </p>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {item.unidade || "-"}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {item.qtd_mensal || "-"}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {item.duracao_meses || "-"}
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                R$ {(typeof item.preco_total === "number"
+                                  ? item.preco_total
+                                  : 0
+                                ).toLocaleString("pt-BR")}
+                              </TableCell>
+                              <TableCell className="text-right text-sm text-muted-foreground">
+                                {item.qtd_mensal && item.duracao_meses ? (
+                                  <>
+                                    {(item.qtd_mensal * item.duracao_meses).toFixed(2)}{" "}
+                                    {item.unidade || ""}
+                                  </>
+                                ) : (
+                                  "-"
                                 )}
-                                {item.hours && (
-                                  <span>{item.hours}h</span>
-                                )}
-                                {item.serviceType && (
-                                  <span>Tipo: {item.serviceType}</span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-medium text-sm">
-                                R$ {item.totalValue.toLocaleString('pt-BR')}
-                              </p>
-                              {item.unitValue && (
-                                <p className="text-xs text-muted-foreground">
-                                  R$ {item.unitValue.toLocaleString('pt-BR')} / {item.unit || 'unid'}
-                                </p>
-                              )}
-                              {item.hourlyRate && (
-                                <p className="text-xs text-muted-foreground">
-                                  R$ {item.hourlyRate.toLocaleString('pt-BR')} / hora
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
                   </CardContent>
                 </Card>
@@ -269,7 +364,7 @@ export const ContractDetailsModal = ({ contract, children }: ContractDetailsModa
           </TabsContent>
 
           <TabsContent value="execution" className="space-y-6">
-            <ExecutionDashboard contractId={contract.id} />
+            <InvoiceUpload contractId={fullContract.id} />
           </TabsContent>
 
           <TabsContent value="progress" className="space-y-6">
@@ -287,22 +382,22 @@ export const ContractDetailsModal = ({ contract, children }: ContractDetailsModa
           {/* Action Buttons */}
           <Separator />
           <div className="flex gap-2 pt-4">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="flex-1"
               onClick={() => {
-                console.log('Editar contrato:', contract.id);
+                console.log("Editar contrato:", fullContract.id);
                 // TODO: Implement contract edit functionality
               }}
             >
               <Edit className="h-4 w-4 mr-2" />
               Editar Contrato
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="flex-1"
               onClick={() => {
-                console.log('Ver compras do contrato:', contract.id);
+                console.log("Ver compras do contrato:", fullContract.id);
                 // TODO: Navigate to purchases filtered by contract
               }}
             >

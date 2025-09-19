@@ -5,42 +5,33 @@ from sqlalchemy import create_engine, text
 import sys
 import os
 
-# URL de conexão direta
-DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/gestor_tarefas"
+# URL de conexão usando variáveis do .env
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/gestor_tarefas")
 
 def create_tables():
     try:
         engine = create_engine(DATABASE_URL, echo=True)
 
-        # SQL para criar tabelas básicas
+        # Usar SQLAlchemy para criar as tabelas dos modelos GMX
+        from app.core.database import Base
+        from app.models.contracts import Contract, BudgetItem
+        from app.models.purchases import Supplier, PurchaseOrder, PurchaseOrderItem, Quotation, Invoice, InvoiceItem
+        from app.models.attachments import Attachment
+        from app.models.audit import AuditLog
+        from app.models.cost_centers import CostCenter
+        # Não importar User pois já existe
+
+        print("Criando tabelas do GMX (preservando existentes)...")
+        # Criar apenas tabelas que não existem
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+
         create_sql = """
-        -- Criar tabela de usuários
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username VARCHAR(50) UNIQUE NOT NULL,
-            email VARCHAR(100) UNIQUE NOT NULL,
-            hashed_password VARCHAR(255) NOT NULL,
-            is_active BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        -- Criar tabela de contratos
-        CREATE TABLE IF NOT EXISTS contracts (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            contract_type VARCHAR(50) NOT NULL,
-            client_name VARCHAR(255),
-            start_date DATE,
-            end_date DATE,
-            total_value NUMERIC(15,2),
-            status VARCHAR(50) DEFAULT 'active',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        -- Inserir dados de teste
-        INSERT INTO users (username, email, hashed_password)
-        VALUES ('admin', 'admin@test.com', '$2b$12$dummy_hash')
-        ON CONFLICT (username) DO NOTHING;
+        -- Script executado com sucesso
+        SELECT 1;
         """
 
         with engine.connect() as connection:

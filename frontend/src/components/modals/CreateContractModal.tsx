@@ -15,57 +15,70 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useCreateContract } from "@/hooks/useContracts";
-import { BudgetImportModal } from "./BudgetImportModal";
-import { ContractType, BudgetImportResult } from "@/types";
-import { Plus, Upload, FileSpreadsheet } from "lucide-react";
+import { ContractType } from "@/types";
+import { budgetService } from "@/services/budgetService";
+import { Plus, Upload, FileSpreadsheet, X } from "lucide-react";
 
 export const CreateContractModal = () => {
   const [open, setOpen] = useState(false);
-  const [budgetImportOpen, setBudgetImportOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     client: "",
-    value: "",
     description: "",
     startDate: "",
     contractType: "" as ContractType | ""
   });
-  const [importedBudget, setImportedBudget] = useState<BudgetImportResult | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   
   const createContract = useCreateContract();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const contractValue = importedBudget ? importedBudget.totalValue : parseFloat(formData.value);
-    
+
+    if (!selectedFile) {
+      setFileError('Arquivo QQP_Cliente é obrigatório');
+      return;
+    }
+
+    if (!formData.contractType) {
+      alert('Por favor, selecione o tipo de contrato');
+      return;
+    }
+
     createContract.mutate({
       name: formData.name,
       client: formData.client,
-      value: contractValue,
-      spent: 0,
-      progress: 0,
-      status: "Em Andamento",
       startDate: formData.startDate,
-      contractType: (formData.contractType as ContractType) || importedBudget?.contractType,
-      predictedBudget: importedBudget?.items,
-      hasBudgetImport: !!importedBudget
+      contractType: formData.contractType as ContractType,
+      description: formData.description,
+      qqpFile: selectedFile
     }, {
       onSuccess: () => {
         setOpen(false);
-        setFormData({ name: "", client: "", value: "", description: "", startDate: "", contractType: "" });
-        setImportedBudget(null);
+        setFormData({ name: "", client: "", description: "", startDate: "", contractType: "" });
+        setSelectedFile(null);
+        setFileError(null);
       }
     });
   };
 
-  const handleBudgetImport = (result: BudgetImportResult) => {
-    setImportedBudget(result);
-    setFormData(prev => ({
-      ...prev,
-      contractType: result.contractType,
-      value: result.totalValue.toString()
-    }));
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setFileError(null);
+
+    if (!file) {
+      setSelectedFile(null);
+      return;
+    }
+
+    // Validar se é arquivo Excel
+    if (!budgetService.isValidExcelFile(file.name)) {
+      setFileError('Arquivo deve ser Excel (.xlsx, .xls ou .xlsm)');
+      return;
+    }
+
+    setSelectedFile(file);
   };
 
   const handleChange = (field: string, value: string) => {
@@ -127,87 +140,70 @@ export const CreateContractModal = () => {
             </Select>
           </div>
 
-          {/* Budget Import Section */}
-          <Card>
+          {/* Upload Arquivo QQP_Cliente (Obrigatório) */}
+          <Card className={fileError ? "border-destructive" : ""}>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <FileSpreadsheet className="h-4 w-4" />
-                Orçamento Previsto
+                Arquivo QQP_Cliente *
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!importedBudget ? (
-                <div className="text-center py-4">
-                  <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Importe a planilha QQP Cliente para preencher automaticamente o orçamento
+              <div className="space-y-2">
+                <Label htmlFor="qqp-file">Planilha Excel com sheet "QQP_Cliente"</Label>
+                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 text-center">
+                  <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <Input
+                    id="qqp-file"
+                    type="file"
+                    accept=".xlsx,.xls,.xlsm"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => document.getElementById('qqp-file')?.click()}
+                  >
+                    Selecionar Arquivo Excel
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Formatos: .xlsx, .xls, .xlsm
                   </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setBudgetImportOpen(true)}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Importar Planilha
-                  </Button>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-sm">Orçamento Importado</p>
-                      <p className="text-xs text-muted-foreground">
-                        {importedBudget.items.length} itens • Tipo: {
-                          importedBudget.contractType === 'material' ? 'Material/Produto' : 'Serviço'
-                        }
-                      </p>
-                    </div>
-                    <Badge variant="secondary">
-                      R$ {importedBudget.totalValue.toLocaleString('pt-BR')}
-                    </Badge>
+                {selectedFile && (
+                  <div className="flex items-center gap-2 p-2 bg-muted/30 rounded">
+                    <FileSpreadsheet className="h-4 w-4 text-success" />
+                    <span className="text-sm font-medium">{selectedFile.name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedFile(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setImportedBudget(null)}
-                  >
-                    Remover Orçamento
-                  </Button>
-                </div>
-              )}
+                )}
+                {fileError && (
+                  <p className="text-sm text-destructive">{fileError}</p>
+                )}
+              </div>
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="value">Valor Total (R$)</Label>
-              <Input
-                id="value"
-                type="number"
-                value={formData.value}
-                onChange={(e) => handleChange("value", e.target.value)}
-                placeholder="2400000"
-                required
-                disabled={!!importedBudget}
-              />
-              {importedBudget && (
-                <p className="text-xs text-muted-foreground">
-                  Valor calculado automaticamente pela importação
-                </p>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Data de Início</Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={formData.startDate}
-                onChange={(e) => handleChange("startDate", e.target.value)}
-                required
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="startDate">Data de Início</Label>
+            <Input
+              id="startDate"
+              type="date"
+              value={formData.startDate}
+              onChange={(e) => handleChange("startDate", e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              Valor total será extraído automaticamente do arquivo QQP_Cliente
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -225,17 +221,12 @@ export const CreateContractModal = () => {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={createContract.isPending}>
+            <Button type="submit" disabled={createContract.isPending || !selectedFile}>
               {createContract.isPending ? "Criando..." : "Criar Contrato"}
             </Button>
           </div>
         </form>
         
-        <BudgetImportModal
-          open={budgetImportOpen}
-          onOpenChange={setBudgetImportOpen}
-          onImportComplete={handleBudgetImport}
-        />
       </DialogContent>
     </Dialog>
   );

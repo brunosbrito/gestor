@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useBudgetImport } from "@/hooks/useBudgetImport";
-import { BudgetImportResult, ContractType } from "@/types";
+import { BudgetImportResult } from "@/types";
+import { budgetService } from "@/services/budgetService";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X } from "lucide-react";
 
 interface BudgetImportModalProps {
@@ -30,18 +31,12 @@ export const BudgetImportModal = ({ open, onOpenChange, onImportComplete }: Budg
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Validate file type
-      const validTypes = [
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-excel',
-        'text/csv'
-      ];
-      
-      if (!validTypes.includes(file.type)) {
-        alert('Por favor, selecione um arquivo Excel (.xlsx, .xls) ou CSV');
+      // Validar se é arquivo Excel com extensão válida
+      if (!budgetService.isValidExcelFile(file.name)) {
+        alert('Por favor, selecione um arquivo Excel (.xlsx, .xls, .xlsm) com sheet QQP_Cliente');
         return;
       }
-      
+
       setSelectedFile(file);
     }
   };
@@ -65,9 +60,6 @@ export const BudgetImportModal = ({ open, onOpenChange, onImportComplete }: Budg
     onOpenChange(false);
   };
 
-  const getContractTypeLabel = (type: ContractType) => {
-    return type === 'material' ? 'Material/Produto' : 'Serviço';
-  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -96,12 +88,12 @@ export const BudgetImportModal = ({ open, onOpenChange, onImportComplete }: Budg
                   Clique para selecionar ou arraste o arquivo aqui
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Formatos aceitos: .xlsx, .xls, .csv
+                  Formatos aceitos: .xlsx, .xls, .xlsm (deve conter sheet "QQP_Cliente")
                 </p>
                 <Input
                   ref={fileInputRef}
                   type="file"
-                  accept=".xlsx,.xls,.csv"
+                  accept=".xlsx,.xls,.xlsm"
                   onChange={handleFileSelect}
                   className="hidden"
                 />
@@ -139,11 +131,11 @@ export const BudgetImportModal = ({ open, onOpenChange, onImportComplete }: Budg
                 <CardTitle className="text-base">Instruções</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <p>• Certifique-se de que a planilha contém a aba "QQP Cliente"</p>
-                <p>• O sistema identificará automaticamente o tipo de contrato</p>
-                <p>• Campos obrigatórios: descrição, categoria, valor total</p>
-                <p>• Para materiais: quantidade, unidade, valor unitário</p>
-                <p>• Para serviços: horas, valor por hora, tipo de serviço</p>
+                <p>• <strong>Obrigatório:</strong> Arquivo deve conter sheet "QQP_Cliente"</p>
+                <p>• Valor total extraído automaticamente da célula específica</p>
+                <p>• Itens importados das linhas 11-21 da planilha</p>
+                <p>• Colunas: Item, Serviços, Unidade, Qtd Mensal, Duração Meses, Preço Total, Observação</p>
+                <p>• Qualquer nome de arquivo aceito (desde que tenha a sheet correta)</p>
               </CardContent>
             </Card>
 
@@ -174,12 +166,12 @@ export const BudgetImportModal = ({ open, onOpenChange, onImportComplete }: Budg
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Itens Importados</p>
-                    <p className="text-2xl font-bold">{importResult.items.length}</p>
+                    <p className="text-2xl font-bold">{importResult.imported_items}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Valor Total</p>
+                    <p className="text-sm text-muted-foreground">Valor Total do Contrato</p>
                     <p className="text-2xl font-bold">
-                      R$ {importResult.totalValue.toLocaleString('pt-BR')}
+                      R$ {importResult.contract_total_value.toLocaleString('pt-BR')}
                     </p>
                   </div>
                 </div>
@@ -187,9 +179,9 @@ export const BudgetImportModal = ({ open, onOpenChange, onImportComplete }: Budg
                 <Separator />
                 
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Tipo de Contrato Identificado</p>
+                  <p className="text-sm text-muted-foreground mb-2">Valor dos Itens</p>
                   <Badge variant="secondary" className="text-sm">
-                    {getContractTypeLabel(importResult.contractType)}
+                    R$ {importResult.items_total.toLocaleString('pt-BR')}
                   </Badge>
                 </div>
 
@@ -227,34 +219,34 @@ export const BudgetImportModal = ({ open, onOpenChange, onImportComplete }: Budg
               </CardHeader>
               <CardContent>
                 <div className="space-y-3 max-h-60 overflow-y-auto">
-                  {importResult.items.slice(0, 5).map((item, index) => (
-                    <div key={item.id} className="p-3 bg-muted/30 rounded-lg">
+                  {importResult.valores_previstos.slice(0, 5).map((item, index) => (
+                    <div key={index} className="p-3 bg-muted/30 rounded-lg">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <p className="font-medium text-sm">{item.description}</p>
-                          <p className="text-xs text-muted-foreground">{item.category}</p>
-                          {item.quantity && (
+                          <p className="font-medium text-sm">{item.servicos}</p>
+                          <p className="text-xs text-muted-foreground">Item: {item.item}</p>
+                          {item.unidade && (
                             <p className="text-xs text-muted-foreground">
-                              {item.quantity} {item.unit}
+                              Unidade: {item.unidade}
                             </p>
                           )}
-                          {item.hours && (
+                          {item.qtd_mensal && (
                             <p className="text-xs text-muted-foreground">
-                              {item.hours}h - {item.serviceType}
+                              Qtd Mensal: {item.qtd_mensal}
                             </p>
                           )}
                         </div>
                         <div className="text-right">
                           <p className="font-medium text-sm">
-                            R$ {item.totalValue.toLocaleString('pt-BR')}
+                            R$ {item.preco_total.toLocaleString('pt-BR')}
                           </p>
                         </div>
                       </div>
                     </div>
                   ))}
-                  {importResult.items.length > 5 && (
+                  {importResult.valores_previstos.length > 5 && (
                     <p className="text-center text-sm text-muted-foreground">
-                      ... e mais {importResult.items.length - 5} itens
+                      ... e mais {importResult.valores_previstos.length - 5} itens
                     </p>
                   )}
                 </div>

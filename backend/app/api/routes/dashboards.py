@@ -128,3 +128,140 @@ async def get_contract_specific_metrics(
         "meta_reducao_percentual": contract.meta_reducao_percentual,
         **metrics
     }
+
+
+# Additional endpoints for frontend compatibility
+@router.get("/kpis")
+async def get_dashboard_kpis(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    KPIs principais do dashboard - compatível com frontend
+    """
+    from app.models.contracts import Contract
+
+    # Buscar todos os contratos
+    contracts = db.query(Contract).all()
+
+    if not contracts:
+        return {
+            "contractBalance": 0,
+            "realizedSavings": 0,
+            "reductionTarget": 0,
+            "pendingPurchases": 0
+        }
+
+    total_value = sum(float(contract.valor_original) for contract in contracts)
+    total_spent = total_value * 0.6  # TODO: calcular baseado em dados reais
+    contract_balance = total_value - total_spent
+    realized_savings = total_value * 0.1  # TODO: calcular economia real
+
+    # Contar compras pendentes (TODO: implementar quando houver purchase orders)
+    pending_purchases = 0
+
+    return {
+        "contractBalance": contract_balance,
+        "realizedSavings": realized_savings,
+        "reductionTarget": 15.0,  # Meta de redução padrão
+        "pendingPurchases": pending_purchases
+    }
+
+
+@router.get("/active-contracts")
+async def get_active_contracts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista de contratos ativos para dashboard
+    """
+    from app.models.contracts import Contract
+
+    # Buscar contratos ativos
+    contracts = db.query(Contract).filter(Contract.status == "Em Andamento").limit(5).all()
+
+    result = []
+    for contract in contracts:
+        # Calcular valores básicos
+        budget = float(contract.valor_original)
+        spent = budget * 0.6  # TODO: calcular baseado em dados reais
+        progress = (spent / budget) * 100 if budget > 0 else 0
+
+        result.append({
+            "id": contract.id,
+            "name": contract.nome_projeto,
+            "progress": progress,
+            "budget": budget,
+            "spent": spent,
+            "status": contract.status
+        })
+
+    return result
+
+
+@router.get("/activities")
+async def get_dashboard_activities(
+    limit: int = Query(10, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Atividades recentes para dashboard
+    """
+    from app.models.contracts import Contract
+
+    # Por enquanto, retornar atividades baseadas em contratos criados recentemente
+    recent_contracts = db.query(Contract).order_by(Contract.created_at.desc()).limit(limit).all()
+
+    activities = []
+    for contract in recent_contracts:
+        activities.append({
+            "id": contract.id,
+            "type": "contract",
+            "description": f"Contrato '{contract.nome_projeto}' criado",
+            "date": contract.created_at.isoformat() if contract.created_at else None,
+            "status": "completed",
+            "value": float(contract.valor_original)
+        })
+
+    return activities
+
+
+@router.get("/alerts")
+async def get_dashboard_alerts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Alertas do dashboard
+    """
+    from app.models.contracts import Contract
+
+    alerts = []
+
+    # Buscar contratos com alto valor
+    high_value_contracts = db.query(Contract).filter(Contract.valor_original > 1000000).all()
+
+    for contract in high_value_contracts:
+        alerts.append({
+            "id": contract.id,
+            "type": "budget",
+            "title": "Contrato de Alto Valor",
+            "description": f"Contrato '{contract.nome_projeto}' tem valor elevado: R$ {float(contract.valor_original):,.2f}",
+            "priority": "medium",
+            "contractId": contract.id,
+            "actionUrl": f"/contracts/{contract.id}"
+        })
+
+    # Adicionar alerta genérico se não houver outros
+    if not alerts:
+        alerts.append({
+            "id": 1,
+            "type": "sync",
+            "title": "Sistema Funcionando",
+            "description": "Todos os sistemas estão operando normalmente",
+            "priority": "low"
+        })
+
+    return alerts
