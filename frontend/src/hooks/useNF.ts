@@ -209,6 +209,186 @@ export const useProcessNF = () => {
   });
 };
 
+// New hooks for n8n integration and enhanced features
+
+export const useProcessFolder = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (folderName: string) => nfService.processFolder(folderName),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['nf'] });
+      queryClient.invalidateQueries({ queryKey: ['nf', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['nf', 'processing-logs'] });
+
+      const result = data.data;
+      toast({
+        title: "Processamento Iniciado",
+        description: result.message,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro no Processamento",
+        description: error.message || "Erro ao processar pasta no n8n",
+        variant: "destructive",
+      });
+    },
+  });
+};
+
+export const useNFsByFolder = (folderName: string, skip = 0, limit = 10) => {
+  return useQuery({
+    queryKey: ['nf', 'by-folder', folderName, skip, limit],
+    queryFn: () => nfService.getByFolder(folderName, skip, limit),
+    enabled: !!folderName,
+  });
+};
+
+export const useProcessingLogs = (skip = 0, limit = 10) => {
+  return useQuery({
+    queryKey: ['nf', 'processing-logs', skip, limit],
+    queryFn: () => nfService.getProcessingLogs(skip, limit),
+  });
+};
+
+export const useValidateNFNew = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (id: number) => nfService.validateNF(id),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['nf'] });
+      queryClient.invalidateQueries({ queryKey: ['nf', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
+
+      const result = data.data;
+      toast({
+        title: "NF Validada",
+        description: result.message,
+      });
+
+      // Show realized value update if contract is linked
+      if (result.valor_realizado_contrato) {
+        toast({
+          title: "Valor Realizado Atualizado",
+          description: `Novo valor realizado: R$ ${result.valor_realizado_contrato.toLocaleString('pt-BR')}`,
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro na Validação",
+        description: error.message || "Erro ao validar NF",
+        variant: "destructive",
+      });
+    },
+  });
+};
+
+export const useUpdateNFItem = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ itemId, itemData }: {
+      itemId: number;
+      itemData: {
+        centro_custo_id?: number;
+        item_orcamento_id?: number;
+        score_classificacao?: number;
+        fonte_classificacao?: string;
+        status_integracao?: string;
+      }
+    }) => nfService.updateItem(itemId, itemData),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['nf'] });
+
+      const result = data.data;
+      toast({
+        title: "Item Atualizado",
+        description: result.message,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao atualizar item",
+        variant: "destructive",
+      });
+    },
+  });
+};
+
+export const useIntegrateNFItem = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({
+      itemId,
+      contratoId,
+      itemOrcamentoId
+    }: {
+      itemId: number;
+      contratoId: number;
+      itemOrcamentoId: number;
+    }) => nfService.integrateItem(itemId, contratoId, itemOrcamentoId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['nf'] });
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
+
+      const result = data.data;
+      toast({
+        title: "Item Integrado",
+        description: result.message,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro na Integração",
+        description: error.message || "Erro ao integrar item ao orçamento",
+        variant: "destructive",
+      });
+    },
+  });
+};
+
+export const useClassifyNFItem = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (itemId: number) => nfService.classifyItem(itemId),
+    onSuccess: (data, itemId) => {
+      queryClient.invalidateQueries({ queryKey: ['nf'] });
+
+      const result = data.data;
+      if (result.success) {
+        toast({
+          title: "Item Classificado",
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: "Classificação Automática",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro na Classificação",
+        description: error.message || "Erro ao classificar item",
+        variant: "destructive",
+      });
+    },
+  });
+};
+
 export const useSearchNFs = () => {
   return useMutation({
     mutationFn: ({ query, filters }: { 

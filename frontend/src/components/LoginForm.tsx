@@ -14,7 +14,21 @@ const LoginForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await login(username, password);
+    console.log("Form submitted with:", { username, password });
+
+    if (!username || !password) {
+      console.error("Username or password is empty");
+      return;
+    }
+
+    const success = await login(username, password);
+    console.log("Login result:", success);
+
+    if (success) {
+      console.log("Login successful, should redirect now");
+    } else {
+      console.log("Login failed, staying on login page");
+    }
   };
 
   const testUsers = [
@@ -46,7 +60,13 @@ const LoginForm: React.FC = () => {
           <CardContent className="space-y-4">
             {error && (
               <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>
+                  <strong>Erro de Login:</strong> {error}
+                  <br />
+                  <small className="text-xs mt-1 block">
+                    Verifique se o backend está rodando em localhost:8000
+                  </small>
+                </AlertDescription>
               </Alert>
             )}
 

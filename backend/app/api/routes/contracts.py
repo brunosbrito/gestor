@@ -102,6 +102,43 @@ async def list_contracts(
     )
 
 
+@router.get("/kpis")
+async def get_contracts_kpis(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Obter KPIs gerais dos contratos"""
+
+    # Buscar todos os contratos ativos
+    contracts = db.query(Contract).all()
+
+    if not contracts:
+        return {
+            "data": {
+                "totalValue": 0,
+                "totalSpent": 0,
+                "avgProgress": 0,
+                "activeContracts": 0
+            }
+        }
+
+    total_value = sum(float(contract.valor_original) for contract in contracts)
+
+    # Calcular valores estimados (TODO: usar dados reais de NFs)
+    total_spent = total_value * 0.6  # 60% realizado em média
+    avg_progress = 60.0  # Progresso médio estimado
+    active_contracts = len([c for c in contracts if c.status == "Em Andamento"])
+
+    return {
+        "data": {
+            "totalValue": total_value,
+            "totalSpent": total_spent,
+            "avgProgress": avg_progress,
+            "activeContracts": active_contracts
+        }
+    }
+
+
 @router.get("/{contract_id}", response_model=ContractDetailResponse)
 async def get_contract(
     contract_id: int,
@@ -381,37 +418,4 @@ async def delete_contract(
 
     return {
         "message": f"Contrato {contract_id} excluído com sucesso"
-    }
-
-
-@router.get("/kpis")
-async def get_contracts_kpis(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Obter KPIs gerais dos contratos"""
-
-    # Buscar todos os contratos ativos
-    contracts = db.query(Contract).all()
-
-    if not contracts:
-        return {
-            "totalValue": 0,
-            "totalSpent": 0,
-            "avgProgress": 0,
-            "activeContracts": 0
-        }
-
-    total_value = sum(float(contract.valor_original) for contract in contracts)
-
-    # Calcular valores estimados (TODO: usar dados reais de NFs)
-    total_spent = total_value * 0.6  # 60% realizado em média
-    avg_progress = 60.0  # Progresso médio estimado
-    active_contracts = len([c for c in contracts if c.status == "Em Andamento"])
-
-    return {
-        "totalValue": total_value,
-        "totalSpent": total_spent,
-        "avgProgress": avg_progress,
-        "activeContracts": active_contracts
     }

@@ -4,6 +4,7 @@ from .purchases import Supplier, PurchaseOrder, Invoice, Quotation
 from .cost_centers import CostCenter
 from .attachments import Attachment
 from .audit import AuditLog
+from .notas_fiscais import NotaFiscal, NotaFiscalItem, ProcessamentoLog
 
 __all__ = [
     "User",
@@ -15,5 +16,8 @@ __all__ = [
     "Quotation",
     "CostCenter",
     "Attachment",
-    "AuditLog"
+    "AuditLog",
+    "NotaFiscal",
+    "NotaFiscalItem",
+    "ProcessamentoLog"
 ]

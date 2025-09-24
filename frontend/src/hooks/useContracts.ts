@@ -25,6 +25,14 @@ export const useContractKPIs = () => {
   });
 };
 
+export const useContractRealizedValue = (id: number) => {
+  return useQuery({
+    queryKey: ['contracts', id, 'realized-value'],
+    queryFn: () => contractsService.getRealizedValue(id),
+    enabled: !!id,
+  });
+};
+
 export interface CreateContractData {
   name: string;
   client: string;

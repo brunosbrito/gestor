@@ -64,23 +64,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setError(null);
 
     try {
+      console.log("Iniciando login para:", username);
+
       // Create FormData for OAuth2 password flow
       const formData = new FormData();
       formData.append("username", username);
       formData.append("password", password);
 
-      console.log("FORM DATA:", username, password);
+      // Use axios API but with FormData directly for OAuth2
       const response = await fetch("http://localhost:8000/api/v1/auth/login", {
         method: "POST",
         body: formData,
       });
 
+      console.log("Response status:", response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error("Login error response:", errorData);
         throw new Error(errorData.detail || "Login failed");
       }
 
       const data = await response.json();
+      console.log("Login success:", data);
       const { access_token } = data;
 
       // Store token
@@ -93,11 +99,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         },
       });
 
+      console.log("User data response status:", userResponse.status);
+
       if (!userResponse.ok) {
+        const errorData = await userResponse.json();
+        console.error("User data error:", errorData);
         throw new Error("Failed to get user data");
       }
 
       const userData = await userResponse.json();
+      console.log("User data received:", userData);
 
       // Store user data
       localStorage.setItem("userData", JSON.stringify(userData));
@@ -107,7 +118,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return true;
     } catch (error: any) {
       console.error("Login error:", error);
-      setError(error.message || "Erro ao fazer login");
+
+      // Verificar tipos específicos de erro
+      let errorMessage = "Erro ao fazer login";
+
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        errorMessage = "Erro de conexão - Verifique se o backend está rodando";
+      } else if (error.message.includes('CORS')) {
+        errorMessage = "Erro de CORS - Problema de configuração do servidor";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setError(errorMessage);
       setIsLoading(false);
       return false;
     }

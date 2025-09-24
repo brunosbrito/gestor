@@ -4,9 +4,21 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
+import httpx
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, get_suprimentos_user
 from app.models.users import User
+from app.models.notas_fiscais import NotaFiscal, NotaFiscalItem, ProcessamentoLog
+from app.models.contracts import Contract
+from app.services.nf_service import NotaFiscalService
+from app.schemas.notas_fiscais import (
+    ProcessFolderRequest,
+    ProcessFolderResponse,
+    NotaFiscalListResponse,
+    NotaFiscalStats,
+    ProcessamentoLogListResponse,
+    NotaFiscalItemUpdate
+)
 
 router = APIRouter()
 
@@ -21,105 +33,50 @@ async def get_nfs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Lista todas as notas fiscais"""
+    """Lista todas as notas fiscais processadas pelo n8n"""
 
-    # Mock data por enquanto
-    mock_nfs = [
-        {
-            "id": 1,
-            "number": "000123456",
-            "series": "001",
-            "supplier": "Fornecedor ABC Ltda",
-            "contract": "Obra Residencial XYZ",
-            "contract_id": 1,
-            "value": 15000.50,
-            "date": "2024-03-15",
-            "status": "Pendente",
-            "items": [
-                {
-                    "id": 1,
-                    "description": "Cimento CP-II-32",
-                    "quantity": 100,
-                    "unitValue": 28.50,
-                    "totalValue": 2850.00,
-                    "unit": "sc",
-                    "weight": 5000.0
-                }
-            ]
-        },
-        {
-            "id": 2,
-            "number": "000123457",
-            "series": "001",
-            "supplier": "Materiais Silva S.A.",
-            "contract": "Construção Comercial ABC",
-            "contract_id": 2,
-            "value": 8750.30,
-            "date": "2024-03-16",
-            "status": "Validada",
-            "items": [
-                {
-                    "id": 2,
-                    "description": "Vergalhão 10mm",
-                    "quantity": 50,
-                    "unitValue": 175.00,
-                    "totalValue": 8750.00,
-                    "unit": "un",
-                    "weight": 500.0
-                }
-            ]
-        }
-    ]
+    # Consultar notas fiscais reais do banco
+    query = db.query(NotaFiscal)
 
-    # Aplicar filtros básicos
-    filtered_nfs = mock_nfs
-
+    # Aplicar filtros
     if status_filter:
-        filtered_nfs = [nf for nf in filtered_nfs if nf["status"].lower() == status_filter.lower()]
+        query = query.filter(NotaFiscal.status_processamento.ilike(f"%{status_filter}%"))
 
     if supplier:
-        filtered_nfs = [nf for nf in filtered_nfs if supplier.lower() in nf["supplier"].lower()]
+        query = query.filter(NotaFiscal.nome_fornecedor.ilike(f"%{supplier}%"))
 
     if contract_id:
-        filtered_nfs = [nf for nf in filtered_nfs if nf["contract_id"] == contract_id]
+        query = query.filter(NotaFiscal.contrato_id == contract_id)
 
-    # Paginação
-    total = len(filtered_nfs)
-    start = skip
-    end = skip + limit
-    paginated_nfs = filtered_nfs[start:end]
+    # Contar total antes da paginação
+    total = query.count()
+
+    # Aplicar paginação
+    nfs = query.offset(skip).limit(limit).all()
 
     return {
-        "nfs": paginated_nfs,
+        "nfs": [
+            {
+                "id": nf.id,
+                "number": nf.numero,
+                "series": nf.serie,
+                "supplier": nf.nome_fornecedor,
+                "contract": nf.contrato.nome_projeto if nf.contrato else None,
+                "contract_id": nf.contrato_id,
+                "value": float(nf.valor_total) if nf.valor_total else 0,
+                "date": nf.data_emissao.strftime("%Y-%m-%d") if nf.data_emissao else None,
+                "status": nf.status_processamento,
+                "pasta_origem": nf.pasta_origem,
+                "subpasta": nf.subpasta,
+                "chave_acesso": nf.chave_acesso,
+                "items_count": len(nf.itens) if nf.itens else 0,
+                "processed_at": nf.processed_by_n8n_at.isoformat() if nf.processed_by_n8n_at else None
+            }
+            for nf in nfs
+        ],
         "total": total,
         "page": skip // limit + 1,
         "per_page": limit
-    }
-
-
-@router.get("/stats")
-async def get_nf_stats(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Estatísticas das notas fiscais"""
-
-    return {
-        "total_nfs": 12,
-        "pending_validation": 3,
-        "validated": 8,
-        "rejected": 1,
-        "total_value": 156750.80,
-        "monthly_stats": [
-            {"month": "Jan", "count": 4, "value": 45200.30},
-            {"month": "Feb", "count": 3, "value": 38150.25},
-            {"month": "Mar", "count": 5, "value": 73400.25}
-        ],
-        "status_distribution": {
-            "Pendente": 3,
-            "Validada": 8,
-            "Rejeitada": 1
-        }
     }
 
 
@@ -129,154 +86,468 @@ async def get_nf(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Detalhe de uma nota fiscal específica"""
+    """Detalhe de uma nota fiscal específica com seus itens"""
 
-    if nf_id == 1:
-        return {
-            "id": 1,
-            "number": "000123456",
-            "series": "001",
-            "supplier": "Fornecedor ABC Ltda",
-            "contract": "Obra Residencial XYZ",
-            "contract_id": 1,
-            "value": 15000.50,
-            "date": "2024-03-15",
-            "status": "Pendente",
-            "xmlFile": "nf_123456.xml",
-            "pdfFile": "nf_123456.pdf",
-            "items": [
-                {
-                    "id": 1,
-                    "description": "Cimento CP-II-32",
-                    "quantity": 100,
-                    "unitValue": 28.50,
-                    "totalValue": 2850.00,
-                    "unit": "sc",
-                    "weight": 5000.0,
-                    "ncm": "25232910",
-                    "budgetItemId": "item_001",
-                    "costCenterId": "materia_prima",
-                    "classificationScore": 95.5,
-                    "classificationSource": "ai"
-                }
-            ]
-        }
-    else:
+    nf = db.query(NotaFiscal).filter(NotaFiscal.id == nf_id).first()
+    if not nf:
         raise HTTPException(status_code=404, detail="Nota fiscal não encontrada")
 
-
-@router.post("/")
-async def create_nf(
-    nf_data: dict,
-    current_user: User = Depends(get_suprimentos_user),
-    db: Session = Depends(get_db)
-):
-    """Criar nova nota fiscal"""
-
-    # Mock response
     return {
-        "id": 999,
-        "number": nf_data.get("number", "NEW123"),
-        "series": nf_data.get("series", "001"),
-        "supplier": nf_data.get("supplier", "Novo Fornecedor"),
-        "value": nf_data.get("value", 0),
-        "date": datetime.now().isoformat(),
-        "status": "Pendente",
-        "message": "Nota fiscal criada com sucesso"
+        "id": nf.id,
+        "number": nf.numero,
+        "series": nf.serie,
+        "chave_acesso": nf.chave_acesso,
+        "supplier": nf.nome_fornecedor,
+        "cnpj_fornecedor": nf.cnpj_fornecedor,
+        "contract": nf.contrato.nome_projeto if nf.contrato else None,
+        "contract_id": nf.contrato_id,
+        "value": float(nf.valor_total) if nf.valor_total else 0,
+        "valor_produtos": float(nf.valor_produtos) if nf.valor_produtos else 0,
+        "valor_impostos": float(nf.valor_impostos) if nf.valor_impostos else 0,
+        "valor_frete": float(nf.valor_frete) if nf.valor_frete else 0,
+        "date": nf.data_emissao.strftime("%Y-%m-%d") if nf.data_emissao else None,
+        "data_entrada": nf.data_entrada.strftime("%Y-%m-%d") if nf.data_entrada else None,
+        "status": nf.status_processamento,
+        "pasta_origem": nf.pasta_origem,
+        "subpasta": nf.subpasta,
+        "observacoes": nf.observacoes,
+        "ordem_compra_id": nf.ordem_compra_id,
+        "processed_at": nf.processed_by_n8n_at.isoformat() if nf.processed_by_n8n_at else None,
+        "created_at": nf.created_at.isoformat() if nf.created_at else None,
+        "items": [
+            {
+                "id": item.id,
+                "numero_item": item.numero_item,
+                "codigo_produto": item.codigo_produto,
+                "description": item.descricao,
+                "quantity": float(item.quantidade) if item.quantidade else 0,
+                "unitValue": float(item.valor_unitario) if item.valor_unitario else 0,
+                "totalValue": float(item.valor_total) if item.valor_total else 0,
+                "unit": item.unidade,
+                "peso_liquido": float(item.peso_liquido) if item.peso_liquido else None,
+                "peso_bruto": float(item.peso_bruto) if item.peso_bruto else None,
+                "ncm": item.ncm,
+                "centro_custo_id": item.centro_custo_id,
+                "centro_custo": item.centro_custo.nome if item.centro_custo else None,
+                "item_orcamento_id": item.item_orcamento_id,
+                "classificationScore": float(item.score_classificacao) if item.score_classificacao else None,
+                "classificationSource": item.fonte_classificacao,
+                "status_integracao": item.status_integracao,
+                "integrado_em": item.integrado_em.isoformat() if item.integrado_em else None
+            }
+            for item in nf.itens
+        ] if nf.itens else []
     }
 
 
-@router.put("/{nf_id}")
-async def update_nf(
-    nf_id: int,
-    nf_data: dict,
+@router.get("/by-folder/{folder_name}")
+async def get_nfs_by_folder(
+    folder_name: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Lista notas fiscais por pasta (subpasta)"""
+
+    query = db.query(NotaFiscal).filter(NotaFiscal.pasta_origem == folder_name)
+
+    total = query.count()
+    nfs = query.offset(skip).limit(limit).all()
+
+    return {
+        "folder_name": folder_name,
+        "nfs": [
+            {
+                "id": nf.id,
+                "numero": nf.numero,
+                "serie": nf.serie,
+                "nome_fornecedor": nf.nome_fornecedor,
+                "valor_total": float(nf.valor_total),
+                "data_emissao": nf.data_emissao,
+                "subpasta": nf.subpasta,
+                "status_processamento": nf.status_processamento,
+                "contrato_id": nf.contrato_id,
+                "itens_count": len(nf.itens) if nf.itens else 0
+            }
+            for nf in nfs
+        ],
+        "total": total,
+        "page": skip // limit + 1,
+        "per_page": limit
+    }
+
+
+@router.get("/contract/{contract_id}/realized-value")
+async def get_contract_realized_value(
+    contract_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Calcula valor realizado de um contrato baseado nas NFs validadas"""
+
+    # Verificar se contrato existe
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contrato não encontrado"
+        )
+
+    service = NotaFiscalService(db)
+    valor_realizado = service.calculate_contract_realized_value(contract_id)
+    nfs = service.get_nfs_by_contract(contract_id)
+
+    # Calcular estatísticas
+    valor_original = float(contract.valor_original)
+    percentual_realizado = (float(valor_realizado) / valor_original * 100) if valor_original > 0 else 0
+    saldo_restante = valor_original - float(valor_realizado)
+
+    # Calcular alertas baseado nos dados
+    alerts = []
+
+    # Alerta de orçamento excedido
+    if percentual_realizado > 100:
+        alerts.append({
+            "id": f"alert_over_budget_{contract_id}",
+            "type": "budget_exceeded",
+            "severity": "high",
+            "message": f"Contrato '{contract.nome_projeto}' excedeu o orçamento em R$ {abs(saldo_restante):,.2f}"
+        })
+
+    # Alerta de alta variação
+    elif percentual_realizado > 90:
+        alerts.append({
+            "id": f"alert_high_usage_{contract_id}",
+            "type": "variance_high",
+            "severity": "medium",
+            "message": f"Contrato '{contract.nome_projeto}' utilizou {percentual_realizado:.1f}% do orçamento"
+        })
+
+    return {
+        "data": {
+            "contract_id": contract_id,
+            "contract_name": contract.nome_projeto,
+            "valor_original": valor_original,
+            "valor_realizado": float(valor_realizado),
+            "percentual_realizado": round(percentual_realizado, 2),
+            "saldo_restante": saldo_restante,
+            "total_nfs": len(nfs),
+            "nfs_validadas": len([nf for nf in nfs if nf.status_processamento == "validado"]),
+            "nfs_nao_validadas": len([nf for nf in nfs if nf.status_processamento != "validado"]),
+            "alerts": alerts,
+            "items": []  # TODO: Implementar items detalhados quando necessário
+        }
+    }
+
+
+@router.get("/stats")
+async def get_nf_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Estatísticas das notas fiscais processadas"""
+
+    from sqlalchemy import func, extract
+
+    # Estatísticas básicas
+    total_nfs = db.query(NotaFiscal).count()
+
+    # Distribuição por status
+    status_counts = db.query(
+        NotaFiscal.status_processamento,
+        func.count(NotaFiscal.id).label('count')
+    ).group_by(NotaFiscal.status_processamento).all()
+
+    status_distribution = {status: count for status, count in status_counts}
+
+    # Valor total
+    total_value_result = db.query(func.sum(NotaFiscal.valor_total)).scalar()
+    total_value = float(total_value_result) if total_value_result else 0
+
+    return {
+        "total_nfs": total_nfs,
+        "pending_validation": status_distribution.get("processado", 0),
+        "validated": status_distribution.get("validado", 0),
+        "rejected": status_distribution.get("erro", 0),
+        "total_value": total_value,
+        "status_distribution": status_distribution
+    }
+
+
+@router.post("/process-folder", response_model=ProcessFolderResponse)
+async def process_folder(
+    folder_data: ProcessFolderRequest,
     current_user: User = Depends(get_suprimentos_user),
     db: Session = Depends(get_db)
 ):
-    """Atualizar nota fiscal"""
+    """
+    Endpoint para processar pasta de notas fiscais via n8n
+    Recebe nome da pasta e chama webhook do n8n para processamento
+    """
+
+    folder_name = folder_data.nome_pasta
+    if not folder_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nome da pasta é obrigatório"
+        )
+
+    # Registrar log de processamento iniciado
+    processing_log = ProcessamentoLog(
+        pasta_nome=folder_name,
+        webhook_chamado_em=datetime.now(),
+        status="iniciado",
+        mensagem="Webhook n8n chamado para processar pasta"
+    )
+    db.add(processing_log)
+    db.commit()
+    db.refresh(processing_log)
+
+    try:
+        # Chamar webhook do n8n
+        n8n_webhook_url = f"https://n8n.gmxindustrial.com.br/webhook-test/{folder_name}"
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(n8n_webhook_url, json={
+                "nome_pasta": folder_name,
+                "user_id": current_user.id,
+                "user_name": current_user.full_name,
+                "timestamp": datetime.now().isoformat()
+            })
+
+        # Atualizar log com sucesso
+        processing_log.status = "webhook_enviado"
+        processing_log.mensagem = f"Webhook enviado com sucesso. Status: {response.status_code}"
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Processamento da pasta '{folder_name}' iniciado com sucesso",
+            "webhook_status": response.status_code,
+            "processing_log_id": processing_log.id,
+            "n8n_url": n8n_webhook_url
+        }
+
+    except httpx.TimeoutException:
+        # Atualizar log com erro de timeout
+        processing_log.status = "erro"
+        processing_log.detalhes_erro = "Timeout ao chamar webhook n8n"
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail="Timeout ao chamar webhook n8n. Tente novamente."
+        )
+
+    except httpx.RequestError as e:
+        # Atualizar log com erro de conexão
+        processing_log.status = "erro"
+        processing_log.detalhes_erro = f"Erro de conexão: {str(e)}"
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Erro ao conectar com n8n: {str(e)}"
+        )
+
+    except Exception as e:
+        # Atualizar log com erro geral
+        processing_log.status = "erro"
+        processing_log.detalhes_erro = f"Erro inesperado: {str(e)}"
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno: {str(e)}"
+        )
+
+
+@router.get("/processing-logs")
+async def get_processing_logs(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Lista logs de processamento das pastas"""
+
+    logs = db.query(ProcessamentoLog).offset(skip).limit(limit).all()
+    total = db.query(ProcessamentoLog).count()
 
     return {
-        "id": nf_id,
-        "message": "Nota fiscal atualizada com sucesso",
-        "updated_fields": list(nf_data.keys())
+        "logs": [
+            {
+                "id": log.id,
+                "pasta_nome": log.pasta_nome,
+                "webhook_chamado_em": log.webhook_chamado_em,
+                "status": log.status,
+                "quantidade_arquivos": log.quantidade_arquivos,
+                "quantidade_nfs": log.quantidade_nfs,
+                "mensagem": log.mensagem,
+                "detalhes_erro": log.detalhes_erro,
+                "created_at": log.created_at
+            }
+            for log in logs
+        ],
+        "total": total,
+        "page": skip // limit + 1,
+        "per_page": limit
     }
 
 
 @router.patch("/{nf_id}/validate")
-async def validate_nf(
+async def validate_nota_fiscal(
     nf_id: int,
     current_user: User = Depends(get_suprimentos_user),
     db: Session = Depends(get_db)
 ):
-    """Validar nota fiscal"""
+    """Valida uma nota fiscal e integra valores ao contrato"""
 
-    return {
-        "id": nf_id,
-        "status": "Validada",
-        "validated_by": current_user.full_name,
-        "validated_at": datetime.now().isoformat(),
-        "message": "Nota fiscal validada com sucesso"
-    }
+    nf = db.query(NotaFiscal).filter(NotaFiscal.id == nf_id).first()
+    if not nf:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nota fiscal não encontrada"
+        )
 
+    # Atualizar status para validado
+    nf.status_processamento = "validado"
+    nf.updated_at = datetime.now()
 
-@router.patch("/{nf_id}/reject")
-async def reject_nf(
-    nf_id: int,
-    reason: str,
-    current_user: User = Depends(get_suprimentos_user),
-    db: Session = Depends(get_db)
-):
-    """Rejeitar nota fiscal"""
+    # Se tem contrato associado, marcar itens como integrados
+    if nf.contrato_id:
+        for item in nf.itens:
+            if item.status_integracao == "pendente":
+                item.status_integracao = "integrado"
+                item.integrado_em = datetime.now()
+                item.updated_at = datetime.now()
 
-    return {
-        "id": nf_id,
-        "status": "Rejeitada",
-        "rejected_by": current_user.full_name,
-        "rejected_at": datetime.now().isoformat(),
-        "reason": reason,
-        "message": "Nota fiscal rejeitada"
-    }
+    db.commit()
+    db.refresh(nf)
 
+    # Calcular novo valor realizado do contrato se aplicável
+    valor_realizado = None
+    if nf.contrato_id:
+        service = NotaFiscalService(db)
+        valor_realizado = float(service.calculate_contract_realized_value(nf.contrato_id))
 
-@router.post("/import")
-async def import_nf(
-    file: UploadFile = File(...),
-    contract_id: Optional[int] = None,
-    current_user: User = Depends(get_suprimentos_user),
-    db: Session = Depends(get_db)
-):
-    """Importar nota fiscal de arquivo XML"""
-
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Arquivo não fornecido")
-
-    if not file.filename.endswith('.xml'):
-        raise HTTPException(status_code=400, detail="Apenas arquivos XML são aceitos")
-
-    # Mock import process
     return {
         "success": True,
-        "message": f"Arquivo {file.filename} importado com sucesso",
-        "nf": {
-            "id": 998,
-            "number": "IMPORTED001",
-            "series": "001",
-            "supplier": "Fornecedor Importado",
-            "value": 12500.00,
-            "items": 5,
-            "contract_id": contract_id
+        "message": "Nota fiscal validada com sucesso",
+        "nf_id": nf_id,
+        "status": nf.status_processamento,
+        "contrato_id": nf.contrato_id,
+        "valor_realizado_contrato": valor_realizado,
+        "validated_by": current_user.full_name,
+        "validated_at": datetime.now().isoformat()
+    }
+
+
+@router.patch("/item/{item_id}")
+async def update_item(
+    item_id: int,
+    item_data: NotaFiscalItemUpdate,
+    current_user: User = Depends(get_suprimentos_user),
+    db: Session = Depends(get_db)
+):
+    """Atualiza um item da nota fiscal"""
+
+    service = NotaFiscalService(db)
+    item = service.update_item_nota_fiscal(item_id, item_data)
+
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item não encontrado"
+        )
+
+    return {
+        "success": True,
+        "message": "Item atualizado com sucesso",
+        "item": {
+            "id": item.id,
+            "centro_custo_id": item.centro_custo_id,
+            "item_orcamento_id": item.item_orcamento_id,
+            "score_classificacao": float(item.score_classificacao) if item.score_classificacao else None,
+            "fonte_classificacao": item.fonte_classificacao,
+            "status_integracao": item.status_integracao,
+            "updated_at": item.updated_at.isoformat() if item.updated_at else None
         }
     }
 
 
-@router.delete("/{nf_id}")
-async def delete_nf(
-    nf_id: int,
+@router.patch("/item/{item_id}/integrate")
+async def integrate_item_to_contract(
+    item_id: int,
+    integration_data: dict,
     current_user: User = Depends(get_suprimentos_user),
     db: Session = Depends(get_db)
 ):
-    """Excluir nota fiscal"""
+    """Integra um item da NF com o orçamento de um contrato"""
+
+    service = NotaFiscalService(db)
+
+    contrato_id = integration_data.get("contrato_id")
+    item_orcamento_id = integration_data.get("item_orcamento_id")
+
+    if not contrato_id or not item_orcamento_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="contrato_id e item_orcamento_id são obrigatórios"
+        )
+
+    success = service.integrate_item_to_contract(item_id, contrato_id, item_orcamento_id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item ou contrato não encontrado"
+        )
 
     return {
-        "message": f"Nota fiscal {nf_id} excluída com sucesso"
+        "success": True,
+        "message": "Item integrado com sucesso",
+        "item_id": item_id,
+        "contrato_id": contrato_id,
+        "item_orcamento_id": item_orcamento_id
     }
+
+
+@router.post("/item/{item_id}/classify")
+async def classify_item_cost_center(
+    item_id: int,
+    current_user: User = Depends(get_suprimentos_user),
+    db: Session = Depends(get_db)
+):
+    """Classifica automaticamente um item em centro de custo"""
+
+    item = db.query(NotaFiscalItem).filter(NotaFiscalItem.id == item_id).first()
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item não encontrado"
+        )
+
+    service = NotaFiscalService(db)
+    center_id = service.classify_item_cost_center(item_id, item.descricao)
+
+    if center_id:
+        # Recarregar item para obter dados atualizados
+        db.refresh(item)
+
+        return {
+            "success": True,
+            "message": "Item classificado com sucesso",
+            "item_id": item_id,
+            "centro_custo_id": center_id,
+            "score_classificacao": float(item.score_classificacao) if item.score_classificacao else None,
+            "fonte_classificacao": item.fonte_classificacao
+        }
+    else:
+        return {
+            "success": False,
+            "message": "Não foi possível classificar automaticamente este item",
+            "item_id": item_id,
+            "suggestion": "Classifique manualmente usando o endpoint de atualização"
+        }

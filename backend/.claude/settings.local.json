@@ -3,7 +3,8 @@
     "allow": [
       "Read(//c/Users/Yasmin/Desktop/dev/gestor/frontend/**)",
       "Read(//c/Users/Yasmin/Desktop/dev/backend/**)",
-      "Read(//c/Users/Yasmin/Desktop/dev/gestor/**)"
+      "Read(//c/Users/Yasmin/Desktop/dev/gestor/**)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

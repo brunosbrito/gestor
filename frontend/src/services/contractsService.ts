@@ -73,6 +73,29 @@ export const contractsService = {
     return apiGet('/contracts/kpis');
   },
 
+  // Get contract realized value from validated NFs
+  getRealizedValue: (id: number): Promise<ApiResponse<{
+    contract_id: number;
+    contract_name: string;
+    valor_original: number;
+    valor_realizado: number;
+    percentual_realizado: number;
+    saldo_restante: number;
+    total_nfs: number;
+    nfs_validadas: number;
+    nfs_pendentes: number;
+    nfs: Array<{
+      id: number;
+      numero: string;
+      nome_fornecedor: string;
+      valor_total: number;
+      status_processamento: string;
+      data_emissao: string;
+    }>;
+  }>> => {
+    return apiGet(`/nf/contract/${id}/realized-value`);
+  },
+
   // Update contract progress
   updateProgress: async (id: number, progress: number): Promise<ApiResponse<Contract>> => {
     return apiPut<Contract>(`/contracts/${id}`, { progress });

@@ -17,100 +17,27 @@ import {
   RefreshCw,
   BarChart3
 } from "lucide-react";
-import { useContractExecution, useUnlinkedNFs, useRecalculateExecution } from "@/hooks/useRealization";
-import { useNFs } from "@/hooks/useNF";
+import { useNFs, useValidateNFNew } from "@/hooks/useNF";
 import { NFToBudgetLinkingModal } from "@/components/modals/NFToBudgetLinkingModal";
-import { useContracts } from "@/hooks/useContracts";
+import { useContracts, useContractRealizedValue } from "@/hooks/useContracts";
 import { formatCurrency, cn } from "@/lib/utils";
 
 interface ExecutionDashboardProps {
   contractId: number;
 }
 
-// Mock data para demonstração
-const mockExecutionData = {
-  contractId: 1,
-  totalPredictedValue: 2400000,
-  totalRealizedValue: 1850000,
-  physicalProgress: 75,
-  financialProgress: 77,
-  lastUpdate: "2024-01-15T10:30:00Z",
-  alerts: [
-    {
-      id: "1",
-      type: "variance_high" as const,
-      severity: "medium" as const,
-      message: "Item 'Estrutura Metálica' apresenta variação de +15% no valor realizado",
-      budgetItemId: "item-001"
-    },
-    {
-      id: "2", 
-      type: "budget_exceeded" as const,
-      severity: "high" as const,
-      message: "Item 'Acabamento' excedeu o orçamento previsto em R$ 45.000",
-      budgetItemId: "item-002"
-    }
-  ],
-  items: [
-    {
-      budgetItemId: "item-001",
-      predictedValue: 500000,
-      realizedValue: 575000,
-      predictedQuantity: 100,
-      realizedQuantity: 100,
-      variance: 75000,
-      variancePercent: 15,
-      status: "completed" as const,
-      linkedNFs: [
-        {
-          nfId: 1,
-          nfItemId: 1,
-          value: 575000,
-          quantity: 100,
-          date: "2024-01-10"
-        }
-      ]
-    },
-    {
-      budgetItemId: "item-002", 
-      predictedValue: 300000,
-      realizedValue: 345000,
-      predictedQuantity: 50,
-      realizedQuantity: 52,
-      variance: 45000,
-      variancePercent: 15,
-      status: "over_budget" as const,
-      linkedNFs: [
-        {
-          nfId: 2,
-          nfItemId: 3,
-          value: 200000,
-          quantity: 30,
-          date: "2024-01-12"
-        },
-        {
-          nfId: 3,
-          nfItemId: 2,
-          value: 145000,
-          quantity: 22,
-          date: "2024-01-14"
-        }
-      ]
-    }
-  ]
-};
 
 export const ExecutionDashboard = ({ contractId }: ExecutionDashboardProps) => {
   const [showAlerts, setShowAlerts] = useState(true);
-  
-  // Usando dados mock por enquanto
-  const executionData = mockExecutionData;
+
+  // Usar dados reais das APIs
   const { data: contracts } = useContracts();
-  const contractData = contracts?.data?.find(c => c.id === contractId);
+  const contractData = contracts?.data?.contracts?.find(c => c.id === contractId);
   const { data: nfs } = useNFs(contractId);
-  const { data: unlinkedNFs } = useUnlinkedNFs(contractId);
-  const unlinkedNFsData = unlinkedNFs?.data;
-  const recalculateMutation = useRecalculateExecution();
+  const { data: realizedValue, isLoading: realizingLoading, refetch } = useContractRealizedValue(contractId);
+  const validateNF = useValidateNFNew();
+
+  const executionData = realizedValue?.data;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -140,8 +67,21 @@ export const ExecutionDashboard = ({ contractId }: ExecutionDashboardProps) => {
   };
 
   const handleRecalculate = () => {
-    recalculateMutation.mutate(contractId);
+    refetch();
   };
+
+  if (realizingLoading) {
+    return (
+      <Card>
+        <CardContent className="text-center py-12">
+          <RefreshCw className="h-12 w-12 mx-auto text-muted-foreground mb-4 animate-spin" />
+          <p className="text-muted-foreground">
+            Carregando dados de realização...
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!executionData) {
     return (
@@ -150,6 +90,9 @@ export const ExecutionDashboard = ({ contractId }: ExecutionDashboardProps) => {
           <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <p className="text-muted-foreground">
             Dados de realização não disponíveis
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Certifique-se de que existem notas fiscais validadas para este contrato
           </p>
         </CardContent>
       </Card>
@@ -163,17 +106,17 @@ export const ExecutionDashboard = ({ contractId }: ExecutionDashboardProps) => {
         <div>
           <h3 className="text-lg font-medium">Dashboard de Realização</h3>
           <p className="text-sm text-muted-foreground">
-            Comparativo Previsto vs Realizado • Atualizado: {new Date(executionData.lastUpdate).toLocaleDateString('pt-BR')}
+            {contractData?.name || `Contrato ${contractId}`} • Comparativo Previsto vs Realizado
           </p>
         </div>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           onClick={handleRecalculate}
-          disabled={recalculateMutation.isPending}
+          disabled={realizingLoading}
           className="flex items-center gap-2"
         >
-          <RefreshCw className={`h-4 w-4 ${recalculateMutation.isPending ? 'animate-spin' : ''}`} />
-          Recalcular
+          <RefreshCw className={`h-4 w-4 ${realizingLoading ? 'animate-spin' : ''}`} />
+          Atualizar
         </Button>
       </div>
 
@@ -181,11 +124,11 @@ export const ExecutionDashboard = ({ contractId }: ExecutionDashboardProps) => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Valor Previsto</CardTitle>
+            <CardTitle className="text-sm font-medium">Valor Orçado</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(executionData.totalPredictedValue)}
+              {formatCurrency(executionData.valor_original)}
             </div>
           </CardContent>
         </Card>
@@ -196,35 +139,43 @@ export const ExecutionDashboard = ({ contractId }: ExecutionDashboardProps) => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-primary">
-              {formatCurrency(executionData.totalRealizedValue)}
+              {formatCurrency(executionData.valor_realizado)}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {executionData.nfs_validadas} de {executionData.total_nfs} NFs validadas
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Variação</CardTitle>
+            <CardTitle className="text-sm font-medium">Saldo Restante</CardTitle>
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${
-              executionData.totalRealizedValue > executionData.totalPredictedValue 
-                ? 'text-red-600' 
-                : 'text-green-600'
+              executionData.saldo_restante < 0 ? 'text-destructive' : 'text-success'
             }`}>
-              {executionData.totalRealizedValue > executionData.totalPredictedValue ? '+' : ''}
-              {formatCurrency(executionData.totalRealizedValue - executionData.totalPredictedValue)}
+              {formatCurrency(Math.abs(executionData.saldo_restante))}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {executionData.saldo_restante < 0 ? 'Excedente' : 'Disponível'}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">% Realizado</CardTitle>
+            <CardTitle className="text-sm font-medium">% Executado</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {((executionData.totalRealizedValue / executionData.totalPredictedValue) * 100).toFixed(1)}%
+            <div className={`text-2xl font-bold ${
+              executionData.percentual_realizado > 100 ? 'text-destructive' : 'text-foreground'
+            }`}>
+              {executionData.percentual_realizado.toFixed(1)}%
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {executionData.percentual_realizado > 100 ? 'Acima do orçamento' : 'Dentro do orçamento'}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -275,100 +226,46 @@ export const ExecutionDashboard = ({ contractId }: ExecutionDashboardProps) => {
       )}
 
       {/* Unlinked NFs Alert */}
-      {unlinkedNFsData && unlinkedNFsData.length > 0 && (
+      {executionData.nfs_nao_validadas && executionData.nfs_nao_validadas > 0 && (
         <Alert>
           <Receipt className="h-4 w-4" />
           <AlertDescription>
             <div className="flex items-center justify-between">
               <span>
-                {unlinkedNFsData.length} Nota(s) Fiscal(is) não vinculada(s) ao orçamento
+                {executionData.nfs_nao_validadas} Nota(s) Fiscal(is) aguardando validação
               </span>
               <Button variant="outline" size="sm">
                 <Link className="h-4 w-4 mr-2" />
-                Vincular Agora
+                Validar Agora
               </Button>
             </div>
           </AlertDescription>
         </Alert>
       )}
 
-      {/* Execution Items */}
+      {/* Notas Fiscais */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Itens de Realização</CardTitle>
+          <CardTitle className="text-base">Notas Fiscais Validadas</CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[400px]">
-            <div className="space-y-4">
-              {executionData.items.map(item => {
-                const budgetItem = contractData?.predictedBudget?.find(b => b.id === item.budgetItemId);
-                
-                return (
-                  <div key={item.budgetItemId} className="p-4 border rounded-lg space-y-4">
-                    {/* Item Header */}
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h4 className="font-medium">{budgetItem?.description || `Item ${item.budgetItemId}`}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {budgetItem?.category}
-                        </p>
-                      </div>
-                      <Badge className={getStatusColor(item.status)}>
-                        {getStatusLabel(item.status)}
-                      </Badge>
-                    </div>
-
-                    {/* Values Comparison */}
-                    <div className="grid grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Previsto</p>
-                        <p className="font-medium">{formatCurrency(item.predictedValue)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Realizado</p>
-                        <p className="font-medium">{formatCurrency(item.realizedValue)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Variação</p>
-                        <p className={`font-medium ${item.variance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {item.variance > 0 ? '+' : ''}{formatCurrency(item.variance)}
-                          <span className="text-xs ml-1">
-                            ({item.variancePercent > 0 ? '+' : ''}{item.variancePercent.toFixed(1)}%)
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span>Progresso</span>
-                        <span>{((item.realizedValue / item.predictedValue) * 100).toFixed(1)}%</span>
-                      </div>
-                      <Progress 
-                        value={(item.realizedValue / item.predictedValue) * 100} 
-                        className="h-2"
-                      />
-                    </div>
-
-                    {/* Linked NFs */}
-                    {item.linkedNFs.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium mb-2">Notas Fiscais Vinculadas:</p>
-                        <div className="space-y-1">
-                          {item.linkedNFs.map(nf => (
-                            <div key={`${nf.nfId}-${nf.nfItemId}`} className="text-xs p-2 bg-muted/30 rounded">
-                              NF {nf.nfId} • {formatCurrency(nf.value)} • {new Date(nf.date).toLocaleDateString('pt-BR')}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+          <div className="text-center py-8 text-muted-foreground">
+            <Receipt className="h-12 w-12 mx-auto mb-4" />
+            <p>Visualização detalhada das notas fiscais</p>
+            <p className="text-sm mt-2">
+              Para ver os itens detalhados das notas fiscais, acesse o módulo de "Importação de NFs"
+            </p>
+            <div className="mt-4 flex justify-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                <span>{executionData.nfs_validadas} NFs Validadas</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-muted-foreground" />
+                <span>{executionData.total_nfs} NFs Total</span>
+              </div>
             </div>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
 
@@ -379,16 +276,20 @@ export const ExecutionDashboard = ({ contractId }: ExecutionDashboardProps) => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4">
-            <Button variant="outline" className="h-auto p-4 flex flex-col items-start">
+            <Button
+              variant="outline"
+              className="h-auto p-4 flex flex-col items-start"
+              onClick={() => window.location.href = '/nf-import'}
+            >
               <div className="flex items-center gap-2 mb-2">
-                <Link className="h-4 w-4" />
-                <span className="font-medium">Vincular NFs</span>
+                <Receipt className="h-4 w-4" />
+                <span className="font-medium">Processar NFs</span>
               </div>
               <p className="text-xs text-muted-foreground text-left">
-                Associar notas fiscais aos itens do orçamento
+                Importar e validar novas notas fiscais
               </p>
             </Button>
-            
+
             <Button variant="outline" className="h-auto p-4 flex flex-col items-start">
               <div className="flex items-center gap-2 mb-2">
                 <BarChart3 className="h-4 w-4" />

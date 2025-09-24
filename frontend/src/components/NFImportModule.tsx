@@ -5,56 +5,63 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useNFs, useNFStats, useImportNFXML, useImportNFBatch, useImportNFPDF, useValidateNF, useRejectNF, useAssociateContract, useProcessNF } from "@/hooks/useNF";
+import {
+  useNFs,
+  useNFStats,
+  useValidateNFNew,
+  useRejectNF,
+  useAssociateContract,
+  useProcessFolder,
+  useProcessingLogs,
+  useNFsByFolder
+} from "@/hooks/useNF";
 import { useContracts } from "@/hooks/useContracts";
 import { MetricCard } from "@/components/MetricCard";
 import { NFImportModal } from "@/components/modals/NFImportModal";
-import { 
-  FileText, 
-  Upload, 
-  Eye, 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle, 
+import {
+  FileText,
+  Upload,
+  Eye,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
   Download,
   FileCheck,
   Search,
   Filter,
-  Plus
+  Plus,
+  Activity,
+  RefreshCw
 } from "lucide-react";
 
 export const NFImportModule = () => {
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedContractId, setSelectedContractId] = useState<number | undefined>();
   const [searchQuery, setSearchQuery] = useState("");
-  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [folderName, setFolderName] = useState("");
+  const [selectedFolder, setSelectedFolder] = useState("");
+  const [showProcessingLogs, setShowProcessingLogs] = useState(false);
 
   const { data: nfStats, isLoading: statsLoading } = useNFStats();
   const { data: nfs, isLoading: nfsLoading } = useNFs(selectedContractId);
   const { data: contracts } = useContracts();
-  
-  const importXML = useImportNFXML();
-  const importBatch = useImportNFBatch();
-  const importPDF = useImportNFPDF();
-  const validateNF = useValidateNF();
+  const { data: processingLogs, isLoading: logsLoading } = useProcessingLogs();
+  const { data: folderNFs, isLoading: folderNFsLoading } = useNFsByFolder(
+    selectedFolder,
+    0,
+    50
+  );
+
+  const processFolder = useProcessFolder();
+  const validateNF = useValidateNFNew();
   const rejectNF = useRejectNF();
   const associateContract = useAssociateContract();
-  const processNF = useProcessNF();
 
-  const handleFileUpload = (file: File, type: 'xml' | 'batch' | 'pdf') => {
-    const onProgress = (progress: number) => setUploadProgress(progress);
-    
-    switch (type) {
-      case 'xml':
-        importXML.mutate({ file, onProgress });
-        break;
-      case 'batch':
-        importBatch.mutate({ file, onProgress });
-        break;
-      case 'pdf':
-        importPDF.mutate({ file, onProgress });
-        break;
+  const handleProcessFolder = () => {
+    if (!folderName.trim()) {
+      return;
     }
+    processFolder.mutate(folderName.trim());
+    setFolderName("");
   };
 
   const getStatusColor = (status: string) => {
@@ -145,105 +152,207 @@ export const NFImportModule = () => {
         />
       </div>
 
-      {/* Import Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Process Folder Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="bg-gradient-card border-0 shadow-card-hover">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
-              Importar XML
+              Processar Pasta de NFs
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              Importe notas fiscais individuais em formato XML
+              Digite o nome da pasta contendo os arquivos de notas fiscais.
+              O n8n irá processar automaticamente todos os arquivos da pasta.
             </p>
-            <Input
-              type="file"
-              accept=".xml"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileUpload(file, 'xml');
-              }}
-              className="mb-4"
-            />
-            {importXML.isPending && (
-              <Progress value={uploadProgress} className="mb-2" />
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="Nome da pasta..."
+                value={folderName}
+                onChange={(e) => setFolderName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !processFolder.isPending) {
+                    handleProcessFolder();
+                  }
+                }}
+                className="flex-1"
+              />
+              <Button
+                onClick={handleProcessFolder}
+                disabled={processFolder.isPending || !folderName.trim()}
+              >
+                {processFolder.isPending ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                Processar
+              </Button>
+            </div>
+            {processFolder.isPending && (
+              <div className="mt-4">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Enviando para n8n...
+                </p>
+                <Progress value={100} className="animate-pulse" />
+              </div>
             )}
-            <Button 
-              className="w-full" 
-              disabled={importXML.isPending}
-              onClick={() => (document.querySelector('input[type="file"]') as HTMLInputElement)?.click()}
-            >
-              Selecionar Arquivo XML
-            </Button>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-card border-0 shadow-card-hover">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              Importação em Lote
+              <Activity className="h-5 w-5" />
+              Logs de Processamento
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              Importe múltiplas NFs compactadas em ZIP
+              Acompanhe o status do processamento das pastas pelo n8n
             </p>
-            <Input
-              type="file"
-              accept=".zip,.rar"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileUpload(file, 'batch');
-              }}
-              className="mb-4"
-            />
-            {importBatch.isPending && (
-              <Progress value={uploadProgress} className="mb-2" />
-            )}
-            <Button 
-              className="w-full" 
-              disabled={importBatch.isPending}
+            <div className="space-y-2">
+              {logsLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-8" />
+                  <Skeleton className="h-8" />
+                </div>
+              ) : (
+                processingLogs?.data.logs.slice(0, 3).map((log) => (
+                  <div key={log.id} className="p-2 bg-muted/30 rounded text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">{log.pasta_nome}</span>
+                      <Badge variant={
+                        log.status === 'concluido' ? 'default' :
+                        log.status === 'erro' ? 'destructive' :
+                        'secondary'
+                      }>
+                        {log.status}
+                      </Badge>
+                    </div>
+                    <p className="text-muted-foreground mt-1">
+                      {log.mensagem || 'Processando...'}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full mt-4"
+              onClick={() => setShowProcessingLogs(!showProcessingLogs)}
             >
-              Selecionar Arquivo ZIP
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-card border-0 shadow-card-hover">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              OCR de PDF
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Extraia dados de NFs em formato PDF usando OCR
-            </p>
-            <Input
-              type="file"
-              accept=".pdf"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileUpload(file, 'pdf');
-              }}
-              className="mb-4"
-            />
-            {importPDF.isPending && (
-              <Progress value={uploadProgress} className="mb-2" />
-            )}
-            <Button 
-              className="w-full" 
-              disabled={importPDF.isPending}
-            >
-              Selecionar PDF
+              Ver Todos os Logs
             </Button>
           </CardContent>
         </Card>
       </div>
+
+      {/* Folder Filter Section */}
+      {processingLogs?.data.logs.length > 0 && (
+        <Card className="bg-gradient-card border-0 shadow-card-hover">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Search className="h-5 w-5" />
+              Visualizar por Subpasta
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              Filtre e visualize as notas fiscais processadas por subpasta específica
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <Input
+                type="text"
+                placeholder="Nome da pasta ou subpasta..."
+                value={selectedFolder}
+                onChange={(e) => setSelectedFolder(e.target.value)}
+                className="flex-1 min-w-0"
+              />
+              <Button
+                variant="outline"
+                onClick={() => setSelectedFolder("")}
+                disabled={!selectedFolder}
+              >
+                Limpar
+              </Button>
+            </div>
+
+            {selectedFolder && folderNFs?.data && (
+              <div className="mt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-sm font-medium">
+                    Pasta: {folderNFs.data.folder_name} ({folderNFs.data.total} NFs)
+                  </p>
+                </div>
+
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {folderNFsLoading ? (
+                    <div className="space-y-2">
+                      {[...Array(3)].map((_, i) => (
+                        <Skeleton key={i} className="h-16" />
+                      ))}
+                    </div>
+                  ) : (
+                    folderNFs.data.nfs.map((nf) => (
+                      <div key={nf.id} className="p-3 bg-muted/20 rounded border">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="font-medium text-sm">
+                              NF {nf.numero} - {nf.nome_fornecedor}
+                            </p>
+                            {nf.subpasta && (
+                              <p className="text-xs text-muted-foreground">
+                                Subpasta: {nf.subpasta}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium text-sm">
+                              R$ {nf.valor_total.toLocaleString('pt-BR')}
+                            </p>
+                            <Badge variant={
+                              nf.status_processamento === 'validado' ? 'default' :
+                              nf.status_processamento === 'erro' ? 'destructive' :
+                              'secondary'
+                            }>
+                              {nf.status_processamento}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {nf.status_processamento === 'processado' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => validateNF.mutate(nf.id)}
+                              disabled={validateNF.isPending}
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Validar
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {/* Navigate to NF details */}}
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            Detalhes
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* NFs List */}
       <Card className="bg-gradient-card border-0 shadow-card-hover">
@@ -297,10 +406,10 @@ export const NFImportModule = () => {
                       Ver Detalhes
                     </Button>
                     
-                    {nf.status === 'Pendente' && (
+                    {(nf.status === 'Pendente' || nf.status === 'processado') && (
                       <>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => validateNF.mutate(nf.id)}
                           disabled={validateNF.isPending}
@@ -308,8 +417,8 @@ export const NFImportModule = () => {
                           <CheckCircle className="h-3 w-3 mr-1" />
                           Validar
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => {
                             const reason = prompt('Motivo da rejeição:');
@@ -364,16 +473,62 @@ export const NFImportModule = () => {
         </CardContent>
       </Card>
 
-      {/* Import Modal */}
-      <NFImportModal
-        open={importModalOpen}
-        onOpenChange={setImportModalOpen}
-        onImportComplete={(result) => {
-          console.log('Import completed:', result);
-          // Refresh NF lists
-          // This will be handled automatically by React Query invalidation
-        }}
-      />
+      {/* Processing Logs Modal */}
+      {showProcessingLogs && processingLogs?.data && (
+        <Card className="bg-gradient-card border-0 shadow-card-hover">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                Histórico Completo de Processamento
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowProcessingLogs(false)}
+              >
+                Fechar
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {processingLogs.data.logs.map((log) => (
+                <div key={log.id} className="p-4 border rounded-lg">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h4 className="font-medium">{log.pasta_nome}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(log.webhook_chamado_em).toLocaleString('pt-BR')}
+                      </p>
+                    </div>
+                    <Badge variant={
+                      log.status === 'concluido' ? 'default' :
+                      log.status === 'erro' ? 'destructive' :
+                      'secondary'
+                    }>
+                      {log.status}
+                    </Badge>
+                  </div>
+                  <div className="text-sm">
+                    <p className="mb-1">{log.mensagem}</p>
+                    {log.quantidade_nfs && (
+                      <p className="text-muted-foreground">
+                        {log.quantidade_nfs} NFs processadas • {log.quantidade_arquivos} arquivos
+                      </p>
+                    )}
+                    {log.detalhes_erro && (
+                      <p className="text-destructive mt-2">
+                        Erro: {log.detalhes_erro}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
