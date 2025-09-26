@@ -368,3 +368,132 @@ class NotaFiscalService:
                     return center.id
 
         return None
+
+    # === KPIS AGREGADOS ===
+
+    def calculate_global_kpis(self) -> Dict[str, Any]:
+        """Calcula KPIs globais baseados em todas as NFs e contratos"""
+
+        # Total de NFs por status
+        total_nfs = self.db.query(NotaFiscal).count()
+        nfs_validadas = self.db.query(NotaFiscal).filter(
+            NotaFiscal.status_processamento == 'validado'
+        ).count()
+        nfs_pendentes = self.db.query(NotaFiscal).filter(
+            NotaFiscal.status_processamento == 'processado'
+        ).count()
+        nfs_erro = self.db.query(NotaFiscal).filter(
+            NotaFiscal.status_processamento == 'erro'
+        ).count()
+
+        # Valor total das NFs validadas
+        total_valor_validado = self.db.query(func.sum(NotaFiscal.valor_total)).filter(
+            NotaFiscal.status_processamento == 'validado'
+        ).scalar() or 0
+
+        # Valor total pendente de validação
+        total_valor_pendente = self.db.query(func.sum(NotaFiscal.valor_total)).filter(
+            NotaFiscal.status_processamento == 'processado'
+        ).scalar() or 0
+
+        # Contratos com NFs
+        contratos_com_nfs = self.db.query(NotaFiscal.contrato_id).filter(
+            NotaFiscal.contrato_id.isnot(None)
+        ).distinct().count()
+
+        # NFs não classificadas por contrato
+        nfs_sem_contrato = self.db.query(NotaFiscal).filter(
+            NotaFiscal.contrato_id.is_(None)
+        ).count()
+
+        # Fornecedores únicos
+        fornecedores_unicos = self.db.query(NotaFiscal.cnpj_fornecedor).distinct().count()
+
+        # Valor médio por NF
+        valor_medio_nf = float(total_valor_validado) / nfs_validadas if nfs_validadas > 0 else 0
+
+        # Estatísticas por centro de custo
+        centros_custo_stats = self.db.query(
+            CostCenter.nome,
+            func.count(NotaFiscalItem.id).label('total_itens'),
+            func.sum(NotaFiscalItem.valor_total).label('valor_total')
+        ).join(
+            NotaFiscalItem, CostCenter.id == NotaFiscalItem.centro_custo_id
+        ).join(
+            NotaFiscal, NotaFiscalItem.nota_fiscal_id == NotaFiscal.id
+        ).filter(
+            NotaFiscal.status_processamento == 'validado'
+        ).group_by(CostCenter.nome).all()
+
+        centros_custo_data = []
+        for nome, total_itens, valor_total in centros_custo_stats:
+            centros_custo_data.append({
+                "nome": nome,
+                "total_itens": total_itens,
+                "valor_total": float(valor_total or 0)
+            })
+
+        return {
+            "resumo_nfs": {
+                "total": total_nfs,
+                "validadas": nfs_validadas,
+                "pendentes": nfs_pendentes,
+                "com_erro": nfs_erro,
+                "taxa_validacao": (nfs_validadas / total_nfs * 100) if total_nfs > 0 else 0
+            },
+            "valores": {
+                "total_validado": float(total_valor_validado),
+                "total_pendente": float(total_valor_pendente),
+                "valor_medio_nf": valor_medio_nf
+            },
+            "contratos": {
+                "contratos_com_nfs": contratos_com_nfs,
+                "nfs_sem_contrato": nfs_sem_contrato
+            },
+            "fornecedores": {
+                "fornecedores_unicos": fornecedores_unicos
+            },
+            "centros_custo": centros_custo_data,
+            "generated_at": datetime.now().isoformat()
+        }
+
+    def get_contracts_summary_with_nfs(self) -> List[Dict[str, Any]]:
+        """Retorna sumário de todos os contratos com informações das NFs"""
+
+        contracts = self.db.query(Contract).all()
+        contracts_summary = []
+
+        for contract in contracts:
+            # Buscar NFs do contrato
+            nfs_count = self.db.query(NotaFiscal).filter(
+                NotaFiscal.contrato_id == contract.id
+            ).count()
+
+            nfs_validadas = self.db.query(NotaFiscal).filter(
+                and_(
+                    NotaFiscal.contrato_id == contract.id,
+                    NotaFiscal.status_processamento == 'validado'
+                )
+            ).count()
+
+            # Calcular valor realizado
+            valor_realizado = self.calculate_contract_realized_value(contract.id)
+
+            contracts_summary.append({
+                "id": contract.id,
+                "numero_contrato": contract.numero_contrato,
+                "nome_projeto": contract.nome_projeto,
+                "cliente": contract.cliente,
+                "valor_original": float(contract.valor_original),
+                "valor_realizado": float(valor_realizado),
+                "percentual_realizado": (float(valor_realizado) / float(contract.valor_original) * 100) if contract.valor_original > 0 else 0,
+                "saldo_restante": float(contract.valor_original) - float(valor_realizado),
+                "status": contract.status,
+                "total_nfs": nfs_count,
+                "nfs_validadas": nfs_validadas,
+                "nfs_pendentes": nfs_count - nfs_validadas,
+                "data_inicio": contract.data_inicio.strftime("%Y-%m-%d") if contract.data_inicio else None,
+                "data_fim_prevista": contract.data_fim_prevista.strftime("%Y-%m-%d") if contract.data_fim_prevista else None
+            })
+
+        return contracts_summary

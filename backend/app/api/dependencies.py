@@ -13,27 +13,31 @@ def get_current_user(
     db: Session = Depends(get_db),
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> User:
-    username = verify_token(credentials.credentials)
-    if username is None:
+    user_identifier = verify_token(credentials.credentials)
+    if user_identifier is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    user = db.query(User).filter(User.username == username).first()
+
+    # Buscar usuário por email (que é o que está no token) ou username (fallback)
+    user = db.query(User).filter(
+        (User.email == user_identifier) | (User.username == user_identifier)
+    ).first()
+
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
         )
-    
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user"
         )
-    
+
     return user
 
 

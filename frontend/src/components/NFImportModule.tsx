@@ -385,7 +385,7 @@ export const NFImportModule = () => {
                     </div>
                     <div className="text-right">
                       <p className="font-medium text-foreground">
-                        R$ {nf.value.toLocaleString('pt-BR')}
+                        R$ {nf.valor_total.toLocaleString('pt-BR')}
                       </p>
                       <Badge className={getStatusColor(nf.status)}>
                         {nf.status}

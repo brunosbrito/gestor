@@ -36,7 +36,7 @@ export const nfService = {
     number: string;
     series: string;
     supplier: string;
-    value: number;
+    valor_total: number;
     contract_id?: number;
   }): Promise<ApiResponse<NotaFiscal>> => {
     return apiPost<NotaFiscal>('/nf', nfData);

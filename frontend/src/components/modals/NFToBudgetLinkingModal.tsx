@@ -173,7 +173,7 @@ export const NFToBudgetLinkingModal = ({
             Vincular Nota Fiscal ao Orçamento
           </DialogTitle>
           <DialogDescription>
-            NF {notaFiscal.number} - {notaFiscal.supplier} • Valor: R$ {notaFiscal.value.toLocaleString('pt-BR')}
+            NF {notaFiscal.number} - {notaFiscal.supplier} • Valor: R$ {notaFiscal.valor_total.toLocaleString('pt-BR')}
           </DialogDescription>
         </DialogHeader>
 

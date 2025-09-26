@@ -3,8 +3,10 @@ import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/MetricCard";
 import { CreateContractModal } from "@/components/modals/CreateContractModal";
 import { ContractDetailsModal } from "@/components/modals/ContractDetailsModal";
-import { Building2, Plus, Search, Filter, TrendingUp, TrendingDown } from "lucide-react";
+import { ContractNFList } from "@/components/ContractNFList";
+import { Building2, Plus, Search, Filter, TrendingUp, TrendingDown, Receipt } from "lucide-react";
 import { useContracts, useContractKPIs, useContractRealizedValue } from "@/hooks/useContracts";
+import { useState } from "react";
 
 interface ContractRealizedValueProps {
   contractId: number;
@@ -73,6 +75,7 @@ const ContractRealizedValue = ({ contractId }: ContractRealizedValueProps) => {
 };
 
 export const ContractModule = () => {
+  const [selectedContractForNFs, setSelectedContractForNFs] = useState<number | null>(null);
   const { data: contractsData, isLoading: contractsLoading } = useContracts();
   const { data: kpisData, isLoading: kpisLoading } = useContractKPIs();
 
@@ -81,6 +84,33 @@ export const ContractModule = () => {
   const totalValue = kpisData?.data?.totalValue || 0;
   const totalSpent = kpisData?.data?.totalSpent || 0;
   const avgProgress = kpisData?.data?.avgProgress || 0;
+
+  // Se um contrato está selecionado para ver NFs, mostrar o componente de NFs
+  if (selectedContractForNFs) {
+    const contract = contracts.find(c => c.id === selectedContractForNFs);
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Button
+              variant="ghost"
+              onClick={() => setSelectedContractForNFs(null)}
+              className="mb-4"
+            >
+              ← Voltar para Contratos
+            </Button>
+            <h1 className="text-3xl font-bold text-foreground">
+              Notas Fiscais - {contract?.name}
+            </h1>
+            <p className="text-muted-foreground">
+              Visualização detalhada das notas fiscais e produtos/serviços
+            </p>
+          </div>
+        </div>
+        <ContractNFList contractId={selectedContractForNFs} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -217,6 +247,14 @@ export const ContractModule = () => {
                         Ver Detalhes
                       </Button>
                     </ContractDetailsModal>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setSelectedContractForNFs(contract.id)}
+                    >
+                      <Receipt className="h-4 w-4 mr-1" />
+                      Ver NFs
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"

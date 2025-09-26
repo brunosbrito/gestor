@@ -37,13 +37,17 @@ api.interceptors.response.use(
       code: error.response?.status?.toString(),
       details: error.response?.data,
     };
-    
+
     // Handle specific error cases
     if (error.response?.status === 401) {
-      // Handle unauthorized - redirect to login when implemented
+      // Handle unauthorized - clear localStorage and force page reload to trigger login
       localStorage.removeItem('authToken');
+      localStorage.removeItem('userData');
+
+      // Force page reload to trigger AuthContext to show login
+      window.location.reload();
     }
-    
+
     return Promise.reject(apiError);
   }
 );
@@ -61,6 +65,10 @@ export const apiPost = <T>(url: string, data?: any): Promise<ApiResponse<T>> => 
 
 export const apiPut = <T>(url: string, data?: any): Promise<ApiResponse<T>> => {
   return api.put(url, data);
+};
+
+export const apiPatch = <T>(url: string, data?: any): Promise<ApiResponse<T>> => {
+  return api.patch(url, data);
 };
 
 export const apiDelete = <T>(url: string): Promise<ApiResponse<T>> => {

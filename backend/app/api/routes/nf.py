@@ -63,7 +63,7 @@ async def get_nfs(
                 "supplier": nf.nome_fornecedor,
                 "contract": nf.contrato.nome_projeto if nf.contrato else None,
                 "contract_id": nf.contrato_id,
-                "value": float(nf.valor_total) if nf.valor_total else 0,
+                "valor_total": float(nf.valor_total) if nf.valor_total else 0,
                 "date": nf.data_emissao.strftime("%Y-%m-%d") if nf.data_emissao else None,
                 "status": nf.status_processamento,
                 "pasta_origem": nf.pasta_origem,
@@ -306,7 +306,7 @@ async def process_folder(
 
     try:
         # Chamar webhook do n8n
-        n8n_webhook_url = f"https://n8n.gmxindustrial.com.br/webhook-test/{folder_name}"
+        n8n_webhook_url = f"https://n8n.gmxindustrial.com.br/webhook/nome_pasta/{folder_name}"
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(n8n_webhook_url, json={
@@ -551,3 +551,115 @@ async def classify_item_cost_center(
             "item_id": item_id,
             "suggestion": "Classifique manualmente usando o endpoint de atualização"
         }
+
+
+@router.get("/contract/{contract_id}/detailed")
+async def get_contract_nfs_detailed(
+    contract_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Lista detalhada das notas fiscais de um contrato com seus itens/produtos"""
+
+    # Verificar se contrato existe
+    contract = db.query(Contract).filter(Contract.id == contract_id).first()
+    if not contract:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contrato não encontrado"
+        )
+
+    # Buscar NFs do contrato
+    query = db.query(NotaFiscal).filter(NotaFiscal.contrato_id == contract_id)
+    total = query.count()
+    nfs = query.offset(skip).limit(limit).all()
+
+    # Montar resposta detalhada
+    nfs_detailed = []
+    for nf in nfs:
+        nf_data = {
+            "id": nf.id,
+            "numero": nf.numero,
+            "serie": nf.serie,
+            "chave_acesso": nf.chave_acesso,
+            "fornecedor": nf.nome_fornecedor,
+            "cnpj_fornecedor": nf.cnpj_fornecedor,
+            "valor_total": float(nf.valor_total) if nf.valor_total else 0,
+            "valor_produtos": float(nf.valor_produtos) if nf.valor_produtos else 0,
+            "valor_impostos": float(nf.valor_impostos) if nf.valor_impostos else 0,
+            "valor_frete": float(nf.valor_frete) if nf.valor_frete else 0,
+            "data_emissao": nf.data_emissao.strftime("%Y-%m-%d") if nf.data_emissao else None,
+            "data_entrada": nf.data_entrada.strftime("%Y-%m-%d") if nf.data_entrada else None,
+            "status_processamento": nf.status_processamento,
+            "pasta_origem": nf.pasta_origem,
+            "subpasta": nf.subpasta,
+            "observacoes": nf.observacoes,
+            "created_at": nf.created_at.isoformat() if nf.created_at else None,
+            "processed_at": nf.processed_by_n8n_at.isoformat() if nf.processed_by_n8n_at else None,
+            "items": []
+        }
+
+        # Adicionar itens da NF
+        for item in nf.itens:
+            item_data = {
+                "id": item.id,
+                "numero_item": item.numero_item,
+                "codigo_produto": item.codigo_produto,
+                "descricao": item.descricao,
+                "ncm": item.ncm,
+                "quantidade": float(item.quantidade) if item.quantidade else 0,
+                "unidade": item.unidade,
+                "valor_unitario": float(item.valor_unitario) if item.valor_unitario else 0,
+                "valor_total": float(item.valor_total) if item.valor_total else 0,
+                "peso_liquido": float(item.peso_liquido) if item.peso_liquido else None,
+                "peso_bruto": float(item.peso_bruto) if item.peso_bruto else None,
+                "centro_custo_id": item.centro_custo_id,
+                "centro_custo": item.centro_custo.nome if item.centro_custo else None,
+                "item_orcamento_id": item.item_orcamento_id,
+                "score_classificacao": float(item.score_classificacao) if item.score_classificacao else None,
+                "fonte_classificacao": item.fonte_classificacao,
+                "status_integracao": item.status_integracao,
+                "integrado_em": item.integrado_em.isoformat() if item.integrado_em else None
+            }
+            nf_data["items"].append(item_data)
+
+        nfs_detailed.append(nf_data)
+
+    # Calcular estatísticas do contrato
+    service = NotaFiscalService(db)
+    valor_realizado = service.calculate_contract_realized_value(contract_id)
+
+    nfs_validadas = len([nf for nf in nfs if nf.status_processamento == "validado"])
+    nfs_pendentes = len([nf for nf in nfs if nf.status_processamento == "processado"])
+    nfs_erro = len([nf for nf in nfs if nf.status_processamento == "erro"])
+
+    return {
+        "contract": {
+            "id": contract.id,
+            "numero_contrato": contract.numero_contrato,
+            "nome_projeto": contract.nome_projeto,
+            "cliente": contract.cliente,
+            "valor_original": float(contract.valor_original),
+            "status": contract.status
+        },
+        "summary": {
+            "total_nfs": total,
+            "nfs_validadas": nfs_validadas,
+            "nfs_pendentes": nfs_pendentes,
+            "nfs_erro": nfs_erro,
+            "valor_realizado": float(valor_realizado),
+            "percentual_realizado": (float(valor_realizado) / float(contract.valor_original) * 100) if contract.valor_original > 0 else 0,
+            "saldo_restante": float(contract.valor_original) - float(valor_realizado),
+            "total_itens": sum(len(nf.itens) for nf in nfs) if nfs else 0
+        },
+        "nfs": nfs_detailed,
+        "pagination": {
+            "total": total,
+            "page": skip // limit + 1,
+            "per_page": limit,
+            "has_next": (skip + limit) < total,
+            "has_prev": skip > 0
+        }
+    }

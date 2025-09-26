@@ -10,6 +10,7 @@ class NotaFiscal(Base):
     """
     Tabela de notas fiscais processadas pelo n8n
     Populada automaticamente pelo n8n após processamento dos arquivos
+    Modelo padronizado sem redundâncias
     """
     __tablename__ = "notas_fiscais"
 
@@ -18,20 +19,20 @@ class NotaFiscal(Base):
     # Dados da nota fiscal
     numero = Column(String(50), nullable=False, index=True)
     serie = Column(String(10), nullable=False)
-    chave_acesso = Column(String(44), nullable=True, index=True)  # Chave da NFe
+    chave_acesso = Column(String(44), nullable=True, index=True)  # Chave única da NFe
 
-    # Fornecedor/Emitente
+    # Fornecedor
     cnpj_fornecedor = Column(String(18), nullable=False, index=True)
     nome_fornecedor = Column(String(255), nullable=False)
 
     # Valores
-    valor_total = Column(DECIMAL(15, 2), nullable=False)
-    valor_produtos = Column(DECIMAL(15, 2), nullable=True)
-    valor_impostos = Column(DECIMAL(15, 2), nullable=True, default=0)
-    valor_frete = Column(DECIMAL(15, 2), nullable=True, default=0)
+    valor_total = Column(DECIMAL(15, 2), nullable=False)  # Valor total da NF
+    valor_produtos = Column(DECIMAL(15, 2), nullable=True)  # Valor dos produtos/serviços
+    valor_impostos = Column(DECIMAL(15, 2), nullable=True, default=0)  # Total de impostos
+    valor_frete = Column(DECIMAL(15, 2), nullable=True, default=0)  # Valor do frete
 
     # Datas
-    data_emissao = Column(DateTime, nullable=False)
+    data_emissao = Column(DateTime, nullable=False, index=True)
     data_entrada = Column(DateTime, nullable=True)
 
     # Organização por pastas (do n8n)
@@ -39,21 +40,25 @@ class NotaFiscal(Base):
     subpasta = Column(String(255), nullable=True, index=True)  # Subpasta se houver
 
     # Status e controle
-    status_processamento = Column(String(50), nullable=False, default='processado')  # processado, erro, validado
+    status_processamento = Column(String(50), nullable=False, default='processado', index=True)  # processado, erro, validado
     observacoes = Column(Text, nullable=True)
 
-    # Classificação automática
+    # Relacionamentos com contratos e ordens de compra
     contrato_id = Column(Integer, ForeignKey("contracts.id"), nullable=True, index=True)
     ordem_compra_id = Column(Integer, ForeignKey("purchase_orders.id"), nullable=True, index=True)
 
     # Auditoria
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     processed_by_n8n_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relacionamentos
-    itens = relationship("NotaFiscalItem", back_populates="nota_fiscal", cascade="all, delete-orphan")
-    contrato = relationship("Contract", foreign_keys=[contrato_id])
+    itens = relationship("NotaFiscalItem", back_populates="nota_fiscal", cascade="all, delete-orphan", primaryjoin="NotaFiscal.id == NotaFiscalItem.nota_id")
+    contrato = relationship(
+        "Contract",
+        primaryjoin="foreign(NotaFiscal.contrato_id) == Contract.id",
+        back_populates="notas_fiscais"
+    )
     ordem_compra = relationship("PurchaseOrder", foreign_keys=[ordem_compra_id])
 
     def __repr__(self):
@@ -68,7 +73,7 @@ class NotaFiscalItem(Base):
     __tablename__ = "nf_itens"
 
     id = Column(Integer, primary_key=True, index=True)
-    nota_fiscal_id = Column(Integer, ForeignKey("notas_fiscais.id"), nullable=False, index=True)
+    nota_id = Column(Integer, ForeignKey("notas_fiscais.id"), nullable=False, index=True)
 
     # Dados do item
     numero_item = Column(Integer, nullable=False)  # Sequencial do item na NF

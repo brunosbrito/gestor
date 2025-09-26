@@ -317,7 +317,7 @@ export const NFImportModal = ({ open, onOpenChange, onImportComplete }: NFImport
                   <div>
                     <p className="text-sm text-muted-foreground">Valor Total</p>
                     <p className="text-2xl font-bold">
-                      R$ {importResult.notasFiscais.reduce((sum, nf) => sum + nf.value, 0).toLocaleString('pt-BR')}
+                      R$ {importResult.notasFiscais.reduce((sum, nf) => sum + nf.valor_total, 0).toLocaleString('pt-BR')}
                     </p>
                   </div>
                 </div>
@@ -409,7 +409,7 @@ export const NFImportModal = ({ open, onOpenChange, onImportComplete }: NFImport
                         </div>
                         <div className="text-right">
                           <p className="font-medium text-sm">
-                            R$ {nf.value.toLocaleString('pt-BR')}
+                            R$ {nf.valor_total.toLocaleString('pt-BR')}
                           </p>
                           <Badge className={
                             nf.status === 'Processada' ? 'bg-success/10 text-success' :

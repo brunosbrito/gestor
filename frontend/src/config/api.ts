@@ -85,7 +85,7 @@ export const getApiConfig = () => {
     },
     production: {
       ...API_CONFIG,
-      BASE_URL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+      BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://apigestorcustos.gmxindustrial.com.br/api/v1',
     },
   };
 

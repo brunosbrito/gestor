@@ -58,10 +58,19 @@ class SimpleDashboardService:
             Quotation.is_selected == None
         ).count()
 
-        # Economia obtida (simplificada)
-        budget_total = self.db.query(func.sum(BudgetItem.valor_total)).scalar() or 0
-        purchase_total = self.db.query(func.sum(PurchaseOrder.valor_total)).scalar() or 0
-        economy_obtained = float(budget_total) - float(purchase_total) if budget_total > purchase_total else 0
+        # Economia obtida baseada nas NFs validadas
+        from app.models.notas_fiscais import NotaFiscal
+        from app.services.nf_service import NotaFiscalService
+
+        budget_total = self.db.query(func.sum(BudgetItem.valor_total_previsto)).scalar() or 0
+
+        # Somar valor realizado de NFs validadas
+        nf_service = NotaFiscalService(self.db)
+        nf_total = self.db.query(func.sum(NotaFiscal.valor_total)).filter(
+            NotaFiscal.status_processamento == 'validado'
+        ).scalar() or 0
+
+        economy_obtained = float(budget_total) - float(nf_total) if budget_total > nf_total else 0
 
         # Gastos por centro de custo (últimos 30 dias)
         thirty_days_ago = datetime.now() - timedelta(days=30)
@@ -132,17 +141,26 @@ class SimpleDashboardService:
         total_contracts = self.db.query(Contract).count()
 
         # Valor total dos contratos
-        total_contract_value = self.db.query(func.sum(Contract.valor_contrato)).scalar() or 0
+        total_contract_value = self.db.query(func.sum(Contract.valor_original)).scalar() or 0
 
-        # Valor realizado total
-        total_realized = self.db.query(func.sum(PurchaseOrder.valor_total)).scalar() or 0
+        # Valor realizado total baseado nas NFs validadas
+        from app.models.notas_fiscais import NotaFiscal
+        from app.services.nf_service import NotaFiscalService
+
+        nf_service = NotaFiscalService(self.db)
+        total_realized = 0
+
+        # Somar valor realizado de todos os contratos
+        all_contracts = self.db.query(Contract).all()
+        for contract in all_contracts:
+            total_realized += float(nf_service.calculate_contract_realized_value(contract.id))
 
         # Percentual de realização geral
-        realization_percentage = (float(total_realized) / float(total_contract_value) * 100) if total_contract_value > 0 else 0
+        realization_percentage = (total_realized / float(total_contract_value) * 100) if total_contract_value > 0 else 0
 
-        # Economia total obtida
-        total_budget = self.db.query(func.sum(BudgetItem.valor_total)).scalar() or 0
-        total_economy = float(total_budget) - float(total_realized) if total_budget > total_realized else 0
+        # Economia total obtida baseada no orçamento vs. NFs validadas
+        total_budget = self.db.query(func.sum(BudgetItem.valor_total_previsto)).scalar() or 0
+        total_economy = float(total_budget) - total_realized if total_budget > total_realized else 0
 
         # Contratos por status
         contracts_by_status = self.db.query(
@@ -159,15 +177,15 @@ class SimpleDashboardService:
 
         # Top 5 contratos por valor
         top_contracts = self.db.query(Contract).order_by(
-            Contract.valor_contrato.desc()
+            Contract.valor_original.desc()
         ).limit(5).all()
 
         top_contracts_data = []
         for contract in top_contracts:
             top_contracts_data.append({
-                "name": contract.nome_contrato,
+                "name": contract.nome_projeto,
                 "client": contract.cliente,
-                "value": float(contract.valor_contrato or 0),
+                "value": float(contract.valor_original or 0),
                 "status": contract.status
             })
 
@@ -178,8 +196,8 @@ class SimpleDashboardService:
         end_date_threshold = datetime.now() + timedelta(days=30)
         expiring_contracts = self.db.query(Contract).filter(
             and_(
-                Contract.data_fim <= end_date_threshold,
-                Contract.status == 'active'
+                Contract.data_fim_prevista <= end_date_threshold,
+                Contract.status == 'Em Andamento'
             )
         ).count()
 

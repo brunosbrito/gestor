@@ -9,15 +9,18 @@ import {
   FileText,
   Clock,
   AlertTriangle,
-  Building2
+  Building2,
+  Receipt
 } from "lucide-react";
 import { useDashboardKPIs, useActiveContracts, useRecentActivities, useDashboardAlerts } from "@/hooks/useDashboard";
+import { useNFStats } from "@/hooks/useNotasFiscais";
 
 export const Dashboard = () => {
   const { data: kpisData, isLoading: kpisLoading } = useDashboardKPIs();
   const { data: contractsData, isLoading: contractsLoading } = useActiveContracts();
   const { data: activitiesData, isLoading: activitiesLoading } = useRecentActivities(3);
   const { data: alertsData, isLoading: alertsLoading } = useDashboardAlerts();
+  const { data: nfStatsData, isLoading: nfStatsLoading, error: nfStatsError } = useNFStats();
 
   const kpis = kpisData?.data ? [
     {
@@ -52,7 +55,7 @@ export const Dashboard = () => {
     }
   ] : [];
 
-  const contracts = contractsData?.data?.contracts || [];
+  const contracts = contractsData?.data || [];
   const recentActivities = activitiesData?.data || [];
   const alerts = alertsData?.data || [];
 
@@ -113,6 +116,62 @@ export const Dashboard = () => {
           />
         ))}
       </div>
+
+      {/* Notas Fiscais Stats */}
+      {nfStatsData?.data && !nfStatsError && (
+        <Card className="bg-gradient-card border-0 shadow-card-hover">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-primary" />
+              Resumo das Notas Fiscais
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-foreground">{nfStatsData.data.total_nfs}</p>
+                <p className="text-sm text-muted-foreground">Total de NFs</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-green-600">{nfStatsData.data.validated}</p>
+                <p className="text-sm text-muted-foreground">Validadas</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-yellow-600">{nfStatsData.data.pending_validation}</p>
+                <p className="text-sm text-muted-foreground">Pendentes</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-foreground">
+                  {new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                  }).format(nfStatsData.data.total_value)}
+                </p>
+                <p className="text-sm text-muted-foreground">Valor Total</p>
+              </div>
+            </div>
+
+            {nfStatsData.data.total_nfs > 0 && (
+              <div className="mt-4">
+                <div className="flex justify-between text-sm mb-2">
+                  <span>Taxa de Validação</span>
+                  <span>{((nfStatsData.data.validated / nfStatsData.data.total_nfs) * 100).toFixed(1)}%</span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div
+                    className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                    style={{
+                      width: `${(nfStatsData.data.validated / nfStatsData.data.total_nfs) * 100}%`
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

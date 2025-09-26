@@ -41,8 +41,13 @@ class Contract(Base):
     budget_items = relationship("BudgetItem", back_populates="contract")
     purchase_orders = relationship("PurchaseOrder", back_populates="contract")
     valores_previstos = relationship("ValorPrevisto", back_populates="contract")
+     # Relacionamento com NFs
+    notas_fiscais = relationship(
+        "NotaFiscal",
+        primaryjoin="Contract.id == foreign(NotaFiscal.contrato_id)",
+        back_populates="contrato"
+    )
     invoices = relationship("Invoice", back_populates="contract")
-
 
 class BudgetItem(Base):
     __tablename__ = "budget_items"

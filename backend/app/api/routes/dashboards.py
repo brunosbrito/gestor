@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional, List
 from datetime import datetime
 from app.core.database import get_db
@@ -140,6 +141,7 @@ async def get_dashboard_kpis(
     KPIs principais do dashboard - compatível com frontend
     """
     from app.models.contracts import Contract
+    from app.services.nf_service import NotaFiscalService
 
     # Buscar todos os contratos
     contracts = db.query(Contract).all()
@@ -152,17 +154,38 @@ async def get_dashboard_kpis(
             "pendingPurchases": 0
         }
 
-    total_value = sum(float(contract.valor_original) for contract in contracts)
-    total_spent = total_value * 0.6  # TODO: calcular baseado em dados reais
-    contract_balance = total_value - total_spent
-    realized_savings = total_value * 0.1  # TODO: calcular economia real
+    nf_service = NotaFiscalService(db)
 
-    # Contar compras pendentes (TODO: implementar quando houver purchase orders)
-    pending_purchases = 0
+    # Calcular valores reais baseados nas NFs validadas
+    total_value = sum(float(contract.valor_original) for contract in contracts)
+    total_spent = 0
+
+    # Somar valor realizado de todos os contratos
+    for contract in contracts:
+        contract_spent = float(nf_service.calculate_contract_realized_value(contract.id))
+        total_spent += contract_spent
+
+    contract_balance = total_value - total_spent
+
+    # Calcular economia baseada no valor orçado vs realizado
+    # Para isso, precisamos dos valores previstos (orçamento detalhado)
+    from app.models.contracts import BudgetItem
+    budget_total = db.query(func.sum(BudgetItem.valor_total_previsto)).scalar() or 0
+    budget_total = float(budget_total)
+
+    # Economia = Orçado - Realizado (quando positivo)
+    realized_savings = max(0, budget_total - total_spent) if budget_total > 0 else 0
+    realized_savings_percent = (realized_savings / budget_total * 100) if budget_total > 0 else 0
+
+    # Contar compras pendentes (POs não finalizadas)
+    from app.models.purchases import PurchaseOrder
+    pending_purchases = db.query(PurchaseOrder).filter(
+        PurchaseOrder.status.in_(['pending', 'approved', 'processing'])
+    ).count()
 
     return {
         "contractBalance": contract_balance,
-        "realizedSavings": realized_savings,
+        "realizedSavings": realized_savings_percent,  # Retorna como percentual
         "reductionTarget": 15.0,  # Meta de redução padrão
         "pendingPurchases": pending_purchases
     }
@@ -177,15 +200,18 @@ async def get_active_contracts(
     Lista de contratos ativos para dashboard
     """
     from app.models.contracts import Contract
+    from app.services.nf_service import NotaFiscalService
 
     # Buscar contratos ativos
     contracts = db.query(Contract).filter(Contract.status == "Em Andamento").limit(5).all()
 
+    nf_service = NotaFiscalService(db)
     result = []
+
     for contract in contracts:
-        # Calcular valores básicos
+        # Calcular valores reais baseados nas NFs validadas
         budget = float(contract.valor_original)
-        spent = budget * 0.6  # TODO: calcular baseado em dados reais
+        spent = float(nf_service.calculate_contract_realized_value(contract.id))
         progress = (spent / budget) * 100 if budget > 0 else 0
 
         result.append({

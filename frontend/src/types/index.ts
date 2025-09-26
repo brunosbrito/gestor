@@ -219,7 +219,7 @@ export interface NotaFiscal {
   supplier: string;
   contract?: string;
   contractId?: number; // Vinculação direta com contrato
-  value: number;
+  valor_total: number;
   items: NFItem[];
   date: string;
   status: 'Pendente' | 'Validada' | 'Rejeitada' | 'Processada';

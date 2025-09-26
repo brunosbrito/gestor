@@ -560,7 +560,7 @@ async def process_folder(
 
     try:
         # Chamar webhook do n8n
-        n8n_webhook_url = f"https://n8n.gmxindustrial.com.br/webhook-test/{folder_name}"
+        n8n_webhook_url = f"https://n8n.gmxindustrial.com.br/webhook/nome_pasta/{folder_name}"
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(n8n_webhook_url, json={

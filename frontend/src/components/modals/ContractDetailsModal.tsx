@@ -32,6 +32,8 @@ import {
   Package,
   Wrench,
   Loader2,
+  Download,
+  Receipt,
 } from "lucide-react";
 import {
   ContractType,
@@ -41,6 +43,8 @@ import {
   ValorPrevisto,
 } from "@/types";
 import { InvoiceUpload } from "@/components/InvoiceUpload";
+import { ImportNFTab } from "@/components/ImportNFTab";
+import { ContractNFList } from "@/components/ContractNFList";
 import { useContract } from "@/hooks/useContracts";
 
 // Interface definitions
@@ -110,10 +114,11 @@ export const ContractDetailsModal = ({
         </DialogHeader>
 
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview">Visão Geral</TabsTrigger>
             <TabsTrigger value="budget">Orçamento Previsto</TabsTrigger>
-            <TabsTrigger value="execution">Realização</TabsTrigger>
+            <TabsTrigger value="import-nf">Importar NFs</TabsTrigger>
+            <TabsTrigger value="realizacao">Notas Fiscais</TabsTrigger>
             <TabsTrigger value="progress">Acompanhamento</TabsTrigger>
           </TabsList>
 
@@ -365,6 +370,17 @@ export const ContractDetailsModal = ({
 
           <TabsContent value="execution" className="space-y-6">
             <InvoiceUpload contractId={fullContract.id} />
+          </TabsContent>
+
+          <TabsContent value="import-nf" className="space-y-6">
+            <ImportNFTab
+              contractId={fullContract.id}
+              contractName={fullContract.name}
+            />
+          </TabsContent>
+
+          <TabsContent value="realizacao" className="space-y-6">
+            <ContractNFList contractId={fullContract.id} />
           </TabsContent>
 
           <TabsContent value="progress" className="space-y-6">
