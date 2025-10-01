@@ -1,7 +1,7 @@
 // API Configuration
 export const API_CONFIG = {
   // Base URL for the backend API
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://api-gestorcustos.gmxindustrial.com.br/api/v1',
 
   // Timeout for API requests (in milliseconds)
   TIMEOUT: 30000,
@@ -81,11 +81,11 @@ export const getApiConfig = () => {
   const configs = {
     development: {
       ...API_CONFIG,
-      BASE_URL: 'http://localhost:8000/api/v1',
+      BASE_URL: 'https://api-gestorcustos.gmxindustrial.com.br/api/v1',
     },
     production: {
       ...API_CONFIG,
-      BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://apigestorcustos.gmxindustrial.com.br/api/v1',
+      BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://api-gestorcustos.gmxindustrial.com.br/api/v1',
     },
   };
 
